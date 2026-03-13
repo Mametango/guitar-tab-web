@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim() || "";
+const storageKey = "guitar-tab-web:last-analysis";
 
 const chordOptions = ["C", "Cm", "D", "Dm", "E", "Em", "F", "Fm", "G", "Gm", "A", "Am", "B", "Bm"];
 const chordShapes = {
@@ -19,8 +20,6 @@ const chordShapes = {
   B: ["x24442", "799877"],
   Bm: ["x24432", "799777"],
 };
-
-const storageKey = "guitar-tab-web:last-analysis";
 
 function mergeChunks(chunks) {
   const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
@@ -71,6 +70,15 @@ function encodeWav(samples, sampleRate) {
 
 function downloadTextFile(fileName, content, type) {
   const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = fileName;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+function downloadBlob(fileName, blob) {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
@@ -171,22 +179,18 @@ function createMidiBlob(analysis) {
   events.push(0x00, 0xff, 0x51, 0x03, 0x07, 0xa1, 0x20);
   events.push(0x00, 0xc0, 0x18);
 
-  let pendingDelta = 0;
-
   for (const measure of analysis.measures) {
     const notes = chordToMidiNotes(measure.chord);
 
-    events.push(...writeVariableLength(pendingDelta), 0x90, notes[0], 96);
+    events.push(0x00, 0x90, notes[0], 96);
     for (let index = 1; index < notes.length; index += 1) {
-      events.push(0x00, notes[index], 84);
+      events.push(0x00, 0x90, notes[index], 84);
     }
 
     events.push(...writeVariableLength(ticksPerMeasure), 0x80, notes[0], 0);
     for (let index = 1; index < notes.length; index += 1) {
-      events.push(0x00, notes[index], 0);
+      events.push(0x00, 0x80, notes[index], 0);
     }
-
-    pendingDelta = 0;
   }
 
   events.push(0x00, 0xff, 0x2f, 0x00);
@@ -208,15 +212,6 @@ function createMidiBlob(analysis) {
   return new Blob([new Uint8Array([...header, ...events])], { type: "audio/midi" });
 }
 
-function downloadBlob(fileName, blob) {
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = fileName;
-  anchor.click();
-  URL.revokeObjectURL(url);
-}
-
 function hydrateAnalysis(data) {
   if (!data) {
     return null;
@@ -228,16 +223,19 @@ function hydrateAnalysis(data) {
     selectedTab: item.selectedTab ?? item.tabCandidates?.[0] ?? chordShapes[item.chord]?.[0] ?? "",
   }));
 
-  const measures = (data.measures ?? chords.map((item, index) => ({
-    number: index + 1,
-    startTime: item.time,
-    chord: item.chord,
-    beats: 4,
-    subdivision: "4/4",
-    rhythmPattern: "Down-Up x4",
-    tabCandidates: item.tabCandidates,
-    selectedTab: item.selectedTab,
-  }))).map((item) => ({
+  const measures = (
+    data.measures ??
+    chords.map((item, index) => ({
+      number: index + 1,
+      startTime: item.time,
+      chord: item.chord,
+      beats: 4,
+      subdivision: "4/4",
+      rhythmPattern: "Down-Up x4",
+      tabCandidates: item.tabCandidates,
+      selectedTab: item.selectedTab,
+    }))
+  ).map((item) => ({
     ...item,
     tabCandidates: item.tabCandidates?.length ? item.tabCandidates : (chordShapes[item.chord] ?? []),
     selectedTab: item.selectedTab ?? item.tabCandidates?.[0] ?? chordShapes[item.chord]?.[0] ?? "",
@@ -363,13 +361,12 @@ function App() {
           setIsRecording(false);
         },
       });
+
       setIsRecording(true);
       setRecordingLabel("録音中です。停止すると WAV ファイルを作成します。");
       setErrorMessage("");
     } catch (error) {
-      setErrorMessage(
-        error instanceof Error ? error.message : "マイクの利用を開始できませんでした。",
-      );
+      setErrorMessage(error instanceof Error ? error.message : "マイクの利用を開始できませんでした。");
     }
   };
 
@@ -387,32 +384,18 @@ function App() {
         return current;
       }
 
-      const nextChords = current.chords.map((item, chordIndex) => {
-        if (chordIndex !== index) {
-          return item;
-        }
-
-        const nextCandidates = chordShapes[nextChord] ?? [];
-
-        return {
-          ...item,
-          chord: nextChord,
-          tabCandidates: nextCandidates,
-          selectedTab: nextCandidates[0] ?? "",
-        };
-      });
+      const nextCandidates = chordShapes[nextChord] ?? [];
 
       return {
         ...current,
-        chords: nextChords,
+        chords: current.chords.map((item, chordIndex) =>
+          chordIndex === index
+            ? { ...item, chord: nextChord, tabCandidates: nextCandidates, selectedTab: nextCandidates[0] ?? "" }
+            : item,
+        ),
         measures: current.measures.map((measure, measureIndex) =>
           measureIndex === index
-            ? {
-                ...measure,
-                chord: nextChord,
-                tabCandidates: chordShapes[nextChord] ?? [],
-                selectedTab: chordShapes[nextChord]?.[0] ?? "",
-              }
+            ? { ...measure, chord: nextChord, tabCandidates: nextCandidates, selectedTab: nextCandidates[0] ?? "" }
             : measure,
         ),
       };
@@ -457,6 +440,7 @@ function App() {
     setAnalysis(null);
     setAudioFile(null);
     setErrorMessage("");
+    setRecordingLabel("");
   };
 
   const handleExportJson = () => {
@@ -464,12 +448,7 @@ function App() {
       return;
     }
 
-    const payload = buildExportPayload(analysis);
-    downloadTextFile(
-      `analysis-${Date.now()}.json`,
-      JSON.stringify(payload, null, 2),
-      "application/json",
-    );
+    downloadTextFile(`analysis-${Date.now()}.json`, JSON.stringify(buildExportPayload(analysis), null, 2), "application/json");
   };
 
   const handleExportText = () => {
@@ -477,11 +456,7 @@ function App() {
       return;
     }
 
-    downloadTextFile(
-      `chord-chart-${Date.now()}.txt`,
-      buildChordChartText(analysis),
-      "text/plain;charset=utf-8",
-    );
+    downloadTextFile(`chord-chart-${Date.now()}.txt`, buildChordChartText(analysis), "text/plain;charset=utf-8");
   };
 
   const handleExportMidi = () => {
@@ -498,8 +473,7 @@ function App() {
         <p className="eyebrow">Guitar Recording to Chords</p>
         <h1>録音からコード進行とTAB候補を作る Web アプリ</h1>
         <p className="hero-copy">
-          まずは録音アップロードからコード推定までを MVP として作り、
-          そのあと精度改善と本格的なTAB自動生成に広げる構成です。
+          iPhone や iPad でも扱いやすいように、録音、解析、修正、書き出しまでを1画面で進められる構成にしています。
         </p>
       </header>
 
@@ -512,20 +486,10 @@ function App() {
           </label>
 
           <div className="recording-actions">
-            <button
-              type="button"
-              className="secondary-button"
-              disabled={isRecording}
-              onClick={handleStartRecording}
-            >
+            <button type="button" className="secondary-button" disabled={isRecording} onClick={handleStartRecording}>
               録音を開始
             </button>
-            <button
-              type="button"
-              className="secondary-button"
-              disabled={!isRecording}
-              onClick={handleStopRecording}
-            >
+            <button type="button" className="secondary-button" disabled={!isRecording} onClick={handleStopRecording}>
               録音を停止
             </button>
           </div>
@@ -538,12 +502,7 @@ function App() {
 
           {errorMessage && <p className="error-text">{errorMessage}</p>}
 
-          <button
-            type="button"
-            className="primary-button"
-            disabled={!audioFile || isAnalyzing}
-            onClick={handleAnalyze}
-          >
+          <button type="button" className="primary-button" disabled={!audioFile || isAnalyzing} onClick={handleAnalyze}>
             {isAnalyzing ? "解析中..." : "解析を開始"}
           </button>
         </section>
@@ -582,7 +541,7 @@ function App() {
               <div className="timeline">
                 {analysis.chords.map((item, index) => (
                   <article key={`${item.time}-${item.chord}`} className="timeline-row">
-                    <div>
+                    <div className="timeline-meta">
                       <p className="time-label">{item.time}</p>
                       <select
                         className="chord-select"
@@ -628,6 +587,7 @@ function App() {
               <p>コード、TAB、簡易リズムを小節単位で整えられます。</p>
             </div>
           )}
+
           {analysis && (
             <div className="measure-grid">
               {analysis.measures.map((measure, index) => (
@@ -636,6 +596,7 @@ function App() {
                     <p className="measure-number">Measure {measure.number}</p>
                     <p className="measure-time">{measure.startTime}</p>
                   </div>
+
                   <select
                     className="chord-select"
                     value={measure.chord}
@@ -647,7 +608,11 @@ function App() {
                       </option>
                     ))}
                   </select>
-                  <p className="measure-meta">{measure.subdivision} / {measure.beats} beats</p>
+
+                  <p className="measure-meta">
+                    {measure.subdivision} / {measure.beats} beats
+                  </p>
+
                   <label className="rhythm-field">
                     <span>簡易リズム</span>
                     <input
@@ -656,6 +621,7 @@ function App() {
                       onChange={(event) => handleRhythmChange(index, event.target.value)}
                     />
                   </label>
+
                   <div className="shape-list">
                     {(measure.tabCandidates?.length ? measure.tabCandidates : ["候補なし"]).map((shape) => (
                       <button
@@ -668,6 +634,7 @@ function App() {
                       </button>
                     ))}
                   </div>
+
                   <p className="selected-tab">
                     TAB候補: <code>{measure.selectedTab || "未選択"}</code>
                   </p>

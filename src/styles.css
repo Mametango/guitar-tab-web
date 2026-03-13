@@ -10,21 +10,33 @@
   box-sizing: border-box;
 }
 
+html {
+  background: #120e0b;
+}
+
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  -webkit-text-size-adjust: 100%;
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
+}
+
+button,
+select,
+input {
+  touch-action: manipulation;
 }
 
 .app-shell {
   max-width: 1120px;
   margin: 0 auto;
-  padding: 48px 20px 64px;
+  padding: calc(24px + env(safe-area-inset-top)) 20px calc(64px + env(safe-area-inset-bottom));
 }
 
 .hero {
@@ -41,7 +53,7 @@ input {
 .hero h1 {
   margin: 0;
   font-size: clamp(2.2rem, 6vw, 4.4rem);
-  line-height: 1;
+  line-height: 1.02;
 }
 
 .hero-copy {
@@ -78,6 +90,10 @@ input {
   background: rgba(255, 255, 255, 0.04);
 }
 
+.upload-box input {
+  width: 100%;
+}
+
 .file-meta {
   margin: 16px 0;
   color: #e7d6c0;
@@ -89,6 +105,8 @@ input {
 }
 
 .primary-button {
+  width: 100%;
+  min-height: 52px;
   padding: 14px 20px;
   border: 0;
   border-radius: 999px;
@@ -99,6 +117,8 @@ input {
 }
 
 .secondary-button {
+  flex: 1 1 0;
+  min-height: 48px;
   padding: 12px 18px;
   border: 1px solid rgba(248, 205, 145, 0.28);
   border-radius: 999px;
@@ -108,7 +128,7 @@ input {
 }
 
 .ghost-button {
-  margin-top: 12px;
+  min-height: 44px;
   padding: 10px 14px;
   border: 1px solid rgba(248, 205, 145, 0.28);
   border-radius: 999px;
@@ -130,8 +150,9 @@ input {
   margin-top: 16px;
 }
 
-.primary-button:disabled {
-  opacity: 0.5;
+.primary-button:disabled,
+.secondary-button:disabled {
+  opacity: 0.55;
   cursor: not-allowed;
 }
 
@@ -159,10 +180,14 @@ input {
   display: flex;
   justify-content: space-between;
   gap: 16px;
-  align-items: center;
+  align-items: flex-start;
   padding: 16px;
   border-radius: 18px;
   background: rgba(255, 248, 240, 0.06);
+}
+
+.timeline-meta {
+  min-width: 140px;
 }
 
 .time-label {
@@ -170,12 +195,9 @@ input {
   color: #f2bb78;
 }
 
-.timeline-row h3 {
-  margin: 0;
-  font-size: 1.5rem;
-}
-
 .chord-select {
+  width: 100%;
+  min-height: 48px;
   padding: 10px 14px;
   border: 1px solid rgba(248, 205, 145, 0.28);
   border-radius: 12px;
@@ -191,6 +213,7 @@ input {
 }
 
 .shape-chip {
+  min-height: 40px;
   padding: 8px 12px;
   border-radius: 999px;
   background: rgba(238, 195, 133, 0.14);
@@ -215,12 +238,6 @@ input {
   margin: 0;
   width: 100%;
   color: #dbc9b1;
-}
-
-.steps {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
 }
 
 .measure-grid {
@@ -258,6 +275,8 @@ input {
 }
 
 .rhythm-input {
+  width: 100%;
+  min-height: 48px;
   padding: 10px 14px;
   border: 1px solid rgba(248, 205, 145, 0.28);
   border-radius: 12px;
@@ -265,27 +284,35 @@ input {
   color: #f7f3e8;
 }
 
-.step-card {
-  padding: 18px;
-  border-radius: 18px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
-}
-
-.step-card h3 {
-  margin-top: 0;
-  color: #f2bb78;
+@media (max-width: 900px) {
+  .grid,
+  .measure-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 800px) {
-  .grid,
-  .steps,
-  .measure-grid {
-    grid-template-columns: 1fr;
+  .app-shell {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .panel {
+    padding: 18px;
+    border-radius: 20px;
+  }
+
+  .hero h1 {
+    font-size: clamp(1.95rem, 9vw, 2.8rem);
   }
 
   .timeline-row {
     flex-direction: column;
-    align-items: flex-start;
+  }
+
+  .recording-actions,
+  .summary-actions {
+    flex-direction: column;
   }
 
   .shape-list {
