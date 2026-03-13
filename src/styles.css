@@ -305,7 +305,7 @@ input {
 }
 
 .chord-chart-card h3 {
-  margin: 10px 0 12px;
+  margin: 0 0 12px;
   font-size: 2.3rem;
   text-align: center;
 }
@@ -334,8 +334,7 @@ input {
 .chord-chart-card .diagram-tab,
 .chord-chart-card .diagram-rhythm,
 .chord-chart-card .base-fret,
-.chord-chart-card .string-status,
-.chord-chart-card .strum-arrow {
+.chord-chart-card .string-status {
   color: #111;
 }
 
@@ -354,20 +353,6 @@ input {
 
 .chord-chart-card-compact h3 {
   font-size: 1.8rem;
-}
-
-.strum-row {
-  display: flex;
-  justify-content: center;
-  gap: 8px;
-  min-height: 32px;
-  margin-bottom: 8px;
-}
-
-.strum-arrow {
-  font-size: 1.7rem;
-  line-height: 1;
-  color: #111;
 }
 
 .diagram-shell {
@@ -393,7 +378,8 @@ input {
 
 .string-status {
   text-align: center;
-  font-size: 1.25rem;
+  font-size: 1.6rem;
+  font-weight: 700;
   color: #111;
 }
 
@@ -546,8 +532,7 @@ input {
 .performance-card .chord-chart-card .diagram-tab,
 .performance-card .chord-chart-card .diagram-rhythm,
 .performance-card .chord-chart-card .base-fret,
-.performance-card .chord-chart-card .string-status,
-.performance-card .chord-chart-card .strum-arrow {
+.performance-card .chord-chart-card .string-status {
   color: #f7f3e8;
 }
 

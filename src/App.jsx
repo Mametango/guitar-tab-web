@@ -232,48 +232,6 @@ function normalizeTabShape(shape) {
   return values;
 }
 
-function parseRhythmPattern(pattern) {
-  const normalized = (pattern || "").trim();
-
-  if (!normalized) {
-    return ["↓", "↑", "↓", "↑"];
-  }
-
-  if (/arpeggio/i.test(normalized)) {
-    return ["↘", "↘", "↘", "↘"];
-  }
-
-  const explicit = normalized
-    .replace(/x\d+/gi, "")
-    .replace(/-/g, " ")
-    .split(/\s+/)
-    .filter(Boolean)
-    .flatMap((token) => {
-      const lower = token.toLowerCase();
-      if (lower === "down") {
-        return ["↓"];
-      }
-      if (lower === "up") {
-        return ["↑"];
-      }
-      return [];
-    });
-
-  if (explicit.length > 0) {
-    return explicit;
-  }
-
-  if (/down-up/i.test(normalized)) {
-    return ["↓", "↑", "↓", "↑"];
-  }
-
-  if (/down/i.test(normalized)) {
-    return ["↓", "↓", "↓", "↓"];
-  }
-
-  return ["↓", "↑", "↓", "↑"];
-}
-
 function ChordDiagram({ chord, shape, rhythmPattern, compact = false }) {
   const frets = normalizeTabShape(shape);
   const numericFrets = frets
@@ -281,18 +239,9 @@ function ChordDiagram({ chord, shape, rhythmPattern, compact = false }) {
     .filter((value) => Number.isFinite(value));
   const minFret = numericFrets.length > 0 ? Math.min(...numericFrets) : 1;
   const baseFret = minFret > 1 ? minFret : 1;
-  const rhythm = parseRhythmPattern(rhythmPattern);
 
   return (
     <article className={`chord-chart-card ${compact ? "chord-chart-card-compact" : ""}`}>
-      <div className="strum-row" aria-label={`${chord} stroke`}>
-        {rhythm.map((arrow, index) => (
-          <span key={`${arrow}-${index}`} className="strum-arrow">
-            {arrow}
-          </span>
-        ))}
-      </div>
-
       <h3>{chord}</h3>
 
       <div className="diagram-shell">
@@ -343,7 +292,7 @@ function ChordDiagram({ chord, shape, rhythmPattern, compact = false }) {
       </div>
 
       {!compact && <p className="diagram-tab">{shape || "TAB未選択"}</p>}
-      <p className="diagram-rhythm">{rhythmPattern || "Down-Up x4"}</p>
+      {!compact && <p className="diagram-rhythm">{rhythmPattern || "Down-Up x4"}</p>}
     </article>
   );
 }
