@@ -279,6 +279,90 @@ input {
   gap: 16px;
 }
 
+.performance-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.performance-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.performance-stage {
+  position: relative;
+  overflow: hidden;
+  min-height: 220px;
+  border-radius: 24px;
+  padding: 24px 0;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02)),
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.03) 0,
+      rgba(255, 255, 255, 0.03) 1px,
+      transparent 1px,
+      transparent 84px
+    );
+}
+
+.performance-target {
+  position: absolute;
+  left: 42%;
+  top: 14px;
+  bottom: 14px;
+  width: 4px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(240, 192, 122, 0.2), rgba(240, 192, 122, 0.95));
+  box-shadow: 0 0 24px rgba(240, 192, 122, 0.35);
+  z-index: 2;
+}
+
+.performance-track {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  gap: 24px;
+  width: max-content;
+  padding: 0 32px;
+  transition: transform 1.1s linear;
+}
+
+.performance-card {
+  width: 144px;
+  min-height: 170px;
+  padding: 16px;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 229, 197, 0.18);
+  background: rgba(28, 21, 16, 0.9);
+  color: #f7f3e8;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.18);
+  transform: scale(0.92);
+  opacity: 0.72;
+  transition: transform 220ms ease, opacity 220ms ease, border-color 220ms ease;
+}
+
+.performance-card h3 {
+  margin: 10px 0;
+  font-size: 2rem;
+}
+
+.performance-card p {
+  margin: 6px 0;
+  color: #dbc9b1;
+}
+
+.performance-number {
+  color: #f2bb78;
+}
+
+.performance-card-active {
+  transform: scale(1);
+  opacity: 1;
+  border-color: rgba(240, 192, 122, 0.55);
+  background: linear-gradient(180deg, rgba(69, 49, 25, 0.96), rgba(31, 23, 16, 0.96));
+}
+
 .measure-card {
   padding: 18px;
   border-radius: 18px;
@@ -345,8 +429,22 @@ input {
   }
 
   .recording-actions,
-  .summary-actions {
+  .summary-actions,
+  .performance-actions {
     flex-direction: column;
+  }
+
+  .performance-stage {
+    min-height: 200px;
+  }
+
+  .performance-target {
+    left: 34%;
+  }
+
+  .performance-card {
+    width: 132px;
+    min-height: 156px;
   }
 
   .shape-list {

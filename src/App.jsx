@@ -254,6 +254,8 @@ function App() {
   const [isRecording, setIsRecording] = useState(false);
   const [recorder, setRecorder] = useState(null);
   const [recordingLabel, setRecordingLabel] = useState("");
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [playbackMeasure, setPlaybackMeasure] = useState(0);
   const [analysis, setAnalysis] = useState(() => {
     try {
       const saved = window.localStorage.getItem(storageKey);
@@ -317,6 +319,18 @@ function App() {
     }));
   }, [analysis]);
 
+  const performanceItems = useMemo(() => {
+    if (!analysis) {
+      return [];
+    }
+
+    return analysis.measures.map((measure, index) => ({
+      ...measure,
+      index,
+      left: index * 168,
+    }));
+  }, [analysis]);
+
   useEffect(() => {
     if (!analysis) {
       return;
@@ -324,6 +338,26 @@ function App() {
 
     window.localStorage.setItem(storageKey, JSON.stringify(analysis));
   }, [analysis]);
+
+  useEffect(() => {
+    if (!analysis || !isPlaying) {
+      return undefined;
+    }
+
+    if (playbackMeasure >= analysis.measures.length - 1) {
+      const doneTimer = window.setTimeout(() => {
+        setIsPlaying(false);
+      }, 1200);
+
+      return () => window.clearTimeout(doneTimer);
+    }
+
+    const timer = window.setTimeout(() => {
+      setPlaybackMeasure((current) => Math.min(current + 1, analysis.measures.length - 1));
+    }, 2000);
+
+    return () => window.clearTimeout(timer);
+  }, [analysis, isPlaying, playbackMeasure]);
 
   const handleFileChange = (event) => {
     const file = event.target.files?.[0] ?? null;
@@ -481,6 +515,8 @@ function App() {
     setAudioFile(null);
     setErrorMessage("");
     setRecordingLabel("");
+    setIsPlaying(false);
+    setPlaybackMeasure(0);
   };
 
   const handleExportJson = () => {
@@ -505,6 +541,20 @@ function App() {
     }
 
     downloadBlob(`chord-chart-${Date.now()}.mid`, createMidiBlob(analysis));
+  };
+
+  const handleStartPlayback = () => {
+    if (!analysis?.measures.length) {
+      return;
+    }
+
+    setPlaybackMeasure(0);
+    setIsPlaying(true);
+  };
+
+  const handleStopPlayback = () => {
+    setIsPlaying(false);
+    setPlaybackMeasure(0);
   };
 
   return (
@@ -706,6 +756,61 @@ function App() {
                   </p>
                 </article>
               ))}
+            </div>
+          )}
+        </section>
+
+        <section className="panel full-width">
+          <h2>4. 演奏モード</h2>
+          {!analysis && (
+            <div className="empty-state">
+              <p>解析後に横スクロールのコードレーンが表示されます。</p>
+              <p>演奏しながら次のコードとストロークを先読みできます。</p>
+            </div>
+          )}
+
+          {analysis && (
+            <div className="performance-panel">
+              <div className="performance-actions">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={isPlaying}
+                  onClick={handleStartPlayback}
+                >
+                  演奏レーンを再生
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={!isPlaying && playbackMeasure === 0}
+                  onClick={handleStopPlayback}
+                >
+                  停止して先頭へ
+                </button>
+              </div>
+
+              <div className="performance-stage">
+                <div className="performance-target" aria-hidden="true" />
+                <div
+                  className="performance-track"
+                  style={{
+                    transform: `translateX(calc(42% - ${playbackMeasure * 168}px))`,
+                  }}
+                >
+                  {performanceItems.map((item) => (
+                    <article
+                      key={`performance-${item.number}`}
+                      className={`performance-card ${item.index === playbackMeasure ? "performance-card-active" : ""}`}
+                    >
+                      <p className="performance-number">#{item.number}</p>
+                      <h3>{item.chord}</h3>
+                      <p>{item.selectedTab || "TAB未選択"}</p>
+                      <p>{item.rhythmPattern}</p>
+                    </article>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
         </section>
