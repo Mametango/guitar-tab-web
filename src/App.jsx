@@ -212,6 +212,42 @@ function createMidiBlob(analysis) {
   return new Blob([new Uint8Array([...header, ...events])], { type: "audio/midi" });
 }
 
+function createAnalysisFromChordText(input) {
+  const measures = input
+    .split("|")
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .map((chord, index) => {
+      const tabCandidates = chordShapes[chord] ?? [];
+      return {
+        number: index + 1,
+        startTime: `0:${String(index * 4).padStart(2, "0")}`,
+        chord,
+        beats: 4,
+        subdivision: "4/4",
+        rhythmPattern: "Down-Up x4",
+        tabCandidates,
+        selectedTab: tabCandidates[0] ?? "",
+      };
+    });
+
+  const chords = measures.map((measure) => ({
+    time: measure.startTime,
+    chord: measure.chord,
+    tabCandidates: measure.tabCandidates,
+    selectedTab: measure.selectedTab,
+  }));
+
+  return {
+    fileName: "manual-input",
+    duration: `00:${String(measures.length * 4).padStart(2, "0")}`,
+    engine: "manual-chord-entry",
+    notes: "手動入力から作成したコード進行です。",
+    chords,
+    measures,
+  };
+}
+
 function normalizeTabShape(shape) {
   if (!shape) {
     return ["x", "x", "x", "x", "x", "x"];
@@ -341,6 +377,7 @@ function App() {
   const [recordingLabel, setRecordingLabel] = useState("");
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackMeasure, setPlaybackMeasure] = useState(0);
+  const [manualChordText, setManualChordText] = useState("C | G | Am | F");
   const [analysis, setAnalysis] = useState(() => {
     try {
       const saved = window.localStorage.getItem(storageKey);
@@ -651,6 +688,22 @@ function App() {
     setPlaybackMeasure(0);
   };
 
+  const handleManualCreate = () => {
+    const nextAnalysis = createAnalysisFromChordText(manualChordText);
+
+    if (!nextAnalysis.measures.length) {
+      setErrorMessage("コード進行を `C | G | Am | F` のように入力してください。");
+      return;
+    }
+
+    setAnalysis(hydrateAnalysis(nextAnalysis));
+    setAudioFile(null);
+    setRecordingLabel("手動入力から譜面を作成しました。");
+    setErrorMessage("");
+    setPlaybackMeasure(0);
+    setIsPlaying(false);
+  };
+
   return (
     <div className="app-shell">
       <header className="hero">
@@ -692,7 +745,25 @@ function App() {
         </section>
 
         <section className="panel">
-          <h2>2. コード進行の推定結果</h2>
+          <h2>2. 手動入力</h2>
+          <div className="manual-entry">
+            <label className="manual-label" htmlFor="manual-chord-text">
+              コード進行を `|` 区切りで入力
+            </label>
+            <textarea
+              id="manual-chord-text"
+              className="manual-textarea"
+              value={manualChordText}
+              onChange={(event) => setManualChordText(event.target.value)}
+            />
+            <button type="button" className="primary-button" onClick={handleManualCreate}>
+              手動でコード表を作成
+            </button>
+          </div>
+        </section>
+
+        <section className="panel">
+          <h2>3. コード進行の推定結果</h2>
           {!analysis && (
             <div className="empty-state">
               <p>解析結果はここに表示されます。</p>
@@ -790,7 +861,7 @@ function App() {
         </section>
 
         <section className="panel full-width">
-          <h2>3. コード表</h2>
+          <h2>4. コード表</h2>
           {!analysis && (
             <div className="empty-state">
               <p>解析後にコードダイアグラムとストロークの見本が表示されます。</p>
@@ -813,7 +884,7 @@ function App() {
         </section>
 
         <section className="panel full-width">
-          <h2>4. 小節ごとのコード配置</h2>
+          <h2>5. 小節ごとのコード配置</h2>
           {!analysis && (
             <div className="empty-state">
               <p>解析後に小節カードが表示されます。</p>
@@ -878,7 +949,7 @@ function App() {
         </section>
 
         <section className="panel full-width">
-          <h2>5. 演奏モード</h2>
+          <h2>6. 演奏モード</h2>
           {!analysis && (
             <div className="empty-state">
               <p>解析後に横スクロールのコードレーンが表示されます。</p>

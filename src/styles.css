@@ -166,6 +166,27 @@ input {
   color: #dbc9b1;
 }
 
+.manual-entry {
+  display: grid;
+  gap: 12px;
+}
+
+.manual-label {
+  color: #f3e9d9;
+}
+
+.manual-textarea {
+  width: 100%;
+  min-height: 120px;
+  padding: 14px;
+  border: 1px solid rgba(248, 205, 145, 0.28);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #f7f3e8;
+  resize: vertical;
+  font: inherit;
+}
+
 .summary-card,
 .overview-card {
   padding: 16px;
