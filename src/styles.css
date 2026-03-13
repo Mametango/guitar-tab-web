@@ -171,6 +171,39 @@ input {
   color: #f3e9d9;
 }
 
+.overview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.overview-card {
+  padding: 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #f3e9d9;
+}
+
+.overview-card h3 {
+  margin: 0 0 12px;
+}
+
+.overview-list {
+  display: grid;
+  gap: 10px;
+}
+
+.overview-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(255, 248, 240, 0.06);
+}
+
 .timeline {
   display: grid;
   gap: 14px;
@@ -286,7 +319,8 @@ input {
 
 @media (max-width: 900px) {
   .grid,
-  .measure-grid {
+  .measure-grid,
+  .overview-grid {
     grid-template-columns: 1fr;
   }
 }

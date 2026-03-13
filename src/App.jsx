@@ -277,6 +277,46 @@ function App() {
     return "録音ファイルを選ぶと、MVP の解析フローを試せます。";
   }, [analysis, audioFile, isAnalyzing]);
 
+  const chordSummary = useMemo(() => {
+    if (!analysis) {
+      return [];
+    }
+
+    const seen = new Set();
+
+    return analysis.measures
+      .map((measure) => ({
+        chord: measure.chord,
+        tab: measure.selectedTab || measure.tabCandidates?.[0] || "",
+      }))
+      .filter((item) => {
+        if (seen.has(item.chord)) {
+          return false;
+        }
+
+        seen.add(item.chord);
+        return true;
+      });
+  }, [analysis]);
+
+  const strokeSummary = useMemo(() => {
+    if (!analysis) {
+      return [];
+    }
+
+    const counts = new Map();
+
+    for (const measure of analysis.measures) {
+      const key = measure.rhythmPattern?.trim() || "未設定";
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+
+    return Array.from(counts.entries()).map(([pattern, count]) => ({
+      pattern,
+      count,
+    }));
+  }, [analysis]);
+
   useEffect(() => {
     if (!analysis) {
       return;
@@ -518,6 +558,32 @@ function App() {
 
           {analysis && (
             <div className="results">
+              <div className="overview-grid">
+                <section className="overview-card">
+                  <h3>使用コード</h3>
+                  <div className="overview-list">
+                    {chordSummary.map((item) => (
+                      <article key={item.chord} className="overview-item">
+                        <strong>{item.chord}</strong>
+                        <code>{item.tab || "TAB未選択"}</code>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+
+                <section className="overview-card">
+                  <h3>ストローク</h3>
+                  <div className="overview-list">
+                    {strokeSummary.map((item) => (
+                      <article key={item.pattern} className="overview-item">
+                        <strong>{item.pattern}</strong>
+                        <span>{item.count} 小節</span>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+              </div>
+
               <div className="summary-card">
                 <p>入力ファイル: {analysis.fileName}</p>
                 <p>推定長さ: {analysis.duration}</p>
