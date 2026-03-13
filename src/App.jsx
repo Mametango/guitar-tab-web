@@ -212,6 +212,142 @@ function createMidiBlob(analysis) {
   return new Blob([new Uint8Array([...header, ...events])], { type: "audio/midi" });
 }
 
+function normalizeTabShape(shape) {
+  if (!shape) {
+    return ["x", "x", "x", "x", "x", "x"];
+  }
+
+  if (shape.includes("-")) {
+    const values = shape.split("-").slice(0, 6);
+    while (values.length < 6) {
+      values.push("x");
+    }
+    return values;
+  }
+
+  const values = shape.split("").slice(0, 6);
+  while (values.length < 6) {
+    values.push("x");
+  }
+  return values;
+}
+
+function parseRhythmPattern(pattern) {
+  const normalized = (pattern || "").trim();
+
+  if (!normalized) {
+    return ["↓", "↑", "↓", "↑"];
+  }
+
+  if (/arpeggio/i.test(normalized)) {
+    return ["↘", "↘", "↘", "↘"];
+  }
+
+  const explicit = normalized
+    .replace(/x\d+/gi, "")
+    .replace(/-/g, " ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .flatMap((token) => {
+      const lower = token.toLowerCase();
+      if (lower === "down") {
+        return ["↓"];
+      }
+      if (lower === "up") {
+        return ["↑"];
+      }
+      return [];
+    });
+
+  if (explicit.length > 0) {
+    return explicit;
+  }
+
+  if (/down-up/i.test(normalized)) {
+    return ["↓", "↑", "↓", "↑"];
+  }
+
+  if (/down/i.test(normalized)) {
+    return ["↓", "↓", "↓", "↓"];
+  }
+
+  return ["↓", "↑", "↓", "↑"];
+}
+
+function ChordDiagram({ chord, shape, rhythmPattern, compact = false }) {
+  const frets = normalizeTabShape(shape);
+  const numericFrets = frets
+    .map((value) => (value === "x" || value === "0" ? null : Number(value)))
+    .filter((value) => Number.isFinite(value));
+  const minFret = numericFrets.length > 0 ? Math.min(...numericFrets) : 1;
+  const baseFret = minFret > 1 ? minFret : 1;
+  const rhythm = parseRhythmPattern(rhythmPattern);
+
+  return (
+    <article className={`chord-chart-card ${compact ? "chord-chart-card-compact" : ""}`}>
+      <div className="strum-row" aria-label={`${chord} stroke`}>
+        {rhythm.map((arrow, index) => (
+          <span key={`${arrow}-${index}`} className="strum-arrow">
+            {arrow}
+          </span>
+        ))}
+      </div>
+
+      <h3>{chord}</h3>
+
+      <div className="diagram-shell">
+        {baseFret > 1 && <span className="base-fret">{baseFret}fr</span>}
+        <div className="string-status-row">
+          {frets.map((value, index) => (
+            <span key={`status-${chord}-${index}`} className="string-status">
+              {value === "x" ? "×" : value === "0" ? "○" : ""}
+            </span>
+          ))}
+        </div>
+
+        <div className="diagram-grid" aria-label={`${chord} diagram`}>
+          {Array.from({ length: 4 }).map((_, fretIndex) => (
+            <div key={`fret-${fretIndex}`} className="diagram-fret-line" style={{ top: `${fretIndex * 25}%` }} />
+          ))}
+          {Array.from({ length: 6 }).map((_, stringIndex) => (
+            <div
+              key={`string-${stringIndex}`}
+              className="diagram-string-line"
+              style={{ left: `${stringIndex * 20}%` }}
+            />
+          ))}
+
+          {frets.map((value, stringIndex) => {
+            if (value === "x" || value === "0") {
+              return null;
+            }
+
+            const numeric = Number(value);
+            if (!Number.isFinite(numeric)) {
+              return null;
+            }
+
+            const row = baseFret > 1 ? numeric - baseFret : numeric - 1;
+            return (
+              <span
+                key={`dot-${chord}-${stringIndex}`}
+                className="diagram-dot"
+                style={{
+                  left: `${stringIndex * 20}%`,
+                  top: `${12.5 + Math.max(0, row) * 25}%`,
+                }}
+              />
+            );
+          })}
+        </div>
+      </div>
+
+      {!compact && <p className="diagram-tab">{shape || "TAB未選択"}</p>}
+      <p className="diagram-rhythm">{rhythmPattern || "Down-Up x4"}</p>
+    </article>
+  );
+}
+
 function hydrateAnalysis(data) {
   if (!data) {
     return null;
@@ -290,6 +426,7 @@ function App() {
       .map((measure) => ({
         chord: measure.chord,
         tab: measure.selectedTab || measure.tabCandidates?.[0] || "",
+        rhythmPattern: measure.rhythmPattern,
       }))
       .filter((item) => {
         if (seen.has(item.chord)) {
@@ -327,7 +464,6 @@ function App() {
     return analysis.measures.map((measure, index) => ({
       ...measure,
       index,
-      left: index * 168,
     }));
   }, [analysis]);
 
@@ -348,7 +484,6 @@ function App() {
       const doneTimer = window.setTimeout(() => {
         setIsPlaying(false);
       }, 1200);
-
       return () => window.clearTimeout(doneTimer);
     }
 
@@ -389,6 +524,8 @@ function App() {
 
       const data = await response.json();
       setAnalysis(hydrateAnalysis(data));
+      setPlaybackMeasure(0);
+      setIsPlaying(false);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "不明なエラーです。");
     } finally {
@@ -524,7 +661,11 @@ function App() {
       return;
     }
 
-    downloadTextFile(`analysis-${Date.now()}.json`, JSON.stringify(buildExportPayload(analysis), null, 2), "application/json");
+    downloadTextFile(
+      `analysis-${Date.now()}.json`,
+      JSON.stringify(buildExportPayload(analysis), null, 2),
+      "application/json",
+    );
   };
 
   const handleExportText = () => {
@@ -532,7 +673,11 @@ function App() {
       return;
     }
 
-    downloadTextFile(`chord-chart-${Date.now()}.txt`, buildChordChartText(analysis), "text/plain;charset=utf-8");
+    downloadTextFile(
+      `chord-chart-${Date.now()}.txt`,
+      buildChordChartText(analysis),
+      "text/plain;charset=utf-8",
+    );
   };
 
   const handleExportMidi = () => {
@@ -696,7 +841,30 @@ function App() {
         </section>
 
         <section className="panel full-width">
-          <h2>3. 小節ごとのコード配置</h2>
+          <h2>3. コード表</h2>
+          {!analysis && (
+            <div className="empty-state">
+              <p>解析後にコードダイアグラムとストロークの見本が表示されます。</p>
+              <p>実際にギターを弾くときの見本シートとして使えます。</p>
+            </div>
+          )}
+
+          {analysis && (
+            <div className="chord-chart-strip">
+              {chordSummary.map((item) => (
+                <ChordDiagram
+                  key={`chart-${item.chord}`}
+                  chord={item.chord}
+                  shape={item.tab}
+                  rhythmPattern={item.rhythmPattern}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="panel full-width">
+          <h2>4. 小節ごとのコード配置</h2>
           {!analysis && (
             <div className="empty-state">
               <p>解析後に小節カードが表示されます。</p>
@@ -761,7 +929,7 @@ function App() {
         </section>
 
         <section className="panel full-width">
-          <h2>4. 演奏モード</h2>
+          <h2>5. 演奏モード</h2>
           {!analysis && (
             <div className="empty-state">
               <p>解析後に横スクロールのコードレーンが表示されます。</p>
@@ -795,19 +963,22 @@ function App() {
                 <div
                   className="performance-track"
                   style={{
-                    transform: `translateX(calc(42% - ${playbackMeasure * 168}px))`,
+                    transform: `translateX(calc(42% - ${playbackMeasure * 232}px))`,
                   }}
                 >
                   {performanceItems.map((item) => (
-                    <article
+                    <div
                       key={`performance-${item.number}`}
                       className={`performance-card ${item.index === playbackMeasure ? "performance-card-active" : ""}`}
                     >
                       <p className="performance-number">#{item.number}</p>
-                      <h3>{item.chord}</h3>
-                      <p>{item.selectedTab || "TAB未選択"}</p>
-                      <p>{item.rhythmPattern}</p>
-                    </article>
+                      <ChordDiagram
+                        chord={item.chord}
+                        shape={item.selectedTab}
+                        rhythmPattern={item.rhythmPattern}
+                        compact
+                      />
+                    </div>
                   ))}
                 </div>
               </div>

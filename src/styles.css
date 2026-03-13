@@ -137,16 +137,19 @@ input {
   cursor: pointer;
 }
 
-.summary-actions {
+.summary-actions,
+.recording-actions,
+.performance-actions {
   display: flex;
+  gap: 12px;
   flex-wrap: wrap;
-  gap: 10px;
+}
+
+.summary-actions {
   margin-top: 12px;
 }
 
 .recording-actions {
-  display: flex;
-  gap: 12px;
   margin-top: 16px;
 }
 
@@ -163,12 +166,16 @@ input {
   color: #dbc9b1;
 }
 
-.summary-card {
-  margin-bottom: 16px;
+.summary-card,
+.overview-card {
   padding: 16px;
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.04);
   color: #f3e9d9;
+}
+
+.summary-card {
+  margin-bottom: 16px;
 }
 
 .overview-grid {
@@ -176,13 +183,6 @@ input {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
   margin-bottom: 16px;
-}
-
-.overview-card {
-  padding: 16px;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.04);
-  color: #f3e9d9;
 }
 
 .overview-card h3 {
@@ -228,7 +228,8 @@ input {
   color: #f2bb78;
 }
 
-.chord-select {
+.chord-select,
+.rhythm-input {
   width: 100%;
   min-height: 48px;
   padding: 10px 14px;
@@ -261,16 +262,24 @@ input {
   border-color: transparent;
 }
 
+.note-text,
+.selected-tab,
+.measure-meta,
+.measure-time,
+.measure-number,
+.diagram-tab,
+.diagram-rhythm {
+  color: #dbc9b1;
+}
+
 .note-text {
   margin-top: 16px;
-  color: #dbc9b1;
   line-height: 1.6;
 }
 
 .selected-tab {
   margin: 0;
   width: 100%;
-  color: #dbc9b1;
 }
 
 .measure-grid {
@@ -279,14 +288,179 @@ input {
   gap: 16px;
 }
 
+.chord-chart-card,
+.measure-card {
+  padding: 18px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
+  border: 1px solid rgba(255, 229, 197, 0.12);
+}
+
+.chord-chart-strip {
+  display: flex;
+  gap: 0;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  scroll-snap-type: x proximity;
+}
+
+.chord-chart-card h3 {
+  margin: 10px 0 12px;
+  font-size: 2.3rem;
+  text-align: center;
+}
+
+.chord-chart-card {
+  min-width: 228px;
+  border-radius: 0;
+  border-right: 2px solid rgba(84, 170, 214, 0.8);
+  scroll-snap-align: start;
+  background: rgba(255, 255, 255, 0.92);
+  color: #111;
+}
+
+.chord-chart-card:first-child {
+  border-top-left-radius: 18px;
+  border-bottom-left-radius: 18px;
+}
+
+.chord-chart-card:last-child {
+  border-top-right-radius: 18px;
+  border-bottom-right-radius: 18px;
+  border-right: 0;
+}
+
+.chord-chart-card h3,
+.chord-chart-card .diagram-tab,
+.chord-chart-card .diagram-rhythm,
+.chord-chart-card .base-fret,
+.chord-chart-card .string-status,
+.chord-chart-card .strum-arrow {
+  color: #111;
+}
+
+.chord-chart-card-compact {
+  min-width: auto;
+  width: 100%;
+  border-radius: 18px;
+  border-right: 0;
+  background: transparent;
+  padding: 0;
+}
+
+.chord-chart-card-compact .diagram-shell {
+  width: min(100%, 168px);
+}
+
+.chord-chart-card-compact h3 {
+  font-size: 1.8rem;
+}
+
+.strum-row {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  min-height: 32px;
+  margin-bottom: 8px;
+}
+
+.strum-arrow {
+  font-size: 1.7rem;
+  line-height: 1;
+  color: #111;
+}
+
+.diagram-shell {
+  position: relative;
+  width: min(100%, 220px);
+  margin: 0 auto;
+}
+
+.base-fret {
+  position: absolute;
+  right: -4px;
+  top: 34px;
+  font-size: 0.8rem;
+  color: #f2bb78;
+}
+
+.string-status-row {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 0;
+  margin-bottom: 6px;
+}
+
+.string-status {
+  text-align: center;
+  font-size: 1.25rem;
+  color: #111;
+}
+
+.diagram-grid {
+  position: relative;
+  aspect-ratio: 6 / 5;
+  border-top: 4px solid rgba(17, 17, 17, 0.92);
+}
+
+.diagram-string-line,
+.diagram-fret-line {
+  position: absolute;
+  background: rgba(17, 17, 17, 0.72);
+}
+
+.diagram-string-line {
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  transform: translateX(-50%);
+}
+
+.diagram-fret-line {
+  left: 0;
+  right: 0;
+  height: 2px;
+}
+
+.diagram-dot {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: #111;
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.92);
+  transform: translate(-50%, -50%);
+}
+
+.diagram-tab,
+.diagram-rhythm {
+  margin: 10px 0 0;
+  text-align: center;
+}
+
+.measure-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.measure-number,
+.measure-time,
+.measure-meta {
+  margin: 0;
+}
+
+.rhythm-field {
+  display: grid;
+  gap: 8px;
+  margin: 14px 0;
+  color: #f3e9d9;
+}
+
 .performance-panel {
   display: grid;
   gap: 16px;
-}
-
-.performance-actions {
-  display: flex;
-  gap: 12px;
 }
 
 .performance-stage {
@@ -329,9 +503,9 @@ input {
 }
 
 .performance-card {
-  width: 144px;
-  min-height: 170px;
-  padding: 16px;
+  width: 208px;
+  min-height: 280px;
+  padding: 12px;
   border-radius: 22px;
   border: 1px solid rgba(255, 229, 197, 0.18);
   background: rgba(28, 21, 16, 0.9);
@@ -363,48 +537,38 @@ input {
   background: linear-gradient(180deg, rgba(69, 49, 25, 0.96), rgba(31, 23, 16, 0.96));
 }
 
-.measure-card {
-  padding: 18px;
-  border-radius: 18px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
-  border: 1px solid rgba(255, 229, 197, 0.12);
-}
-
-.measure-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.measure-number,
-.measure-time,
-.measure-meta {
-  margin: 0;
-  color: #dbc9b1;
-}
-
-.rhythm-field {
-  display: grid;
-  gap: 8px;
-  margin: 14px 0;
-  color: #f3e9d9;
-}
-
-.rhythm-input {
-  width: 100%;
-  min-height: 48px;
-  padding: 10px 14px;
-  border: 1px solid rgba(248, 205, 145, 0.28);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.06);
+.performance-card .chord-chart-card {
+  background: transparent;
   color: #f7f3e8;
+}
+
+.performance-card .chord-chart-card h3,
+.performance-card .chord-chart-card .diagram-tab,
+.performance-card .chord-chart-card .diagram-rhythm,
+.performance-card .chord-chart-card .base-fret,
+.performance-card .chord-chart-card .string-status,
+.performance-card .chord-chart-card .strum-arrow {
+  color: #f7f3e8;
+}
+
+.performance-card .diagram-grid {
+  border-top-color: rgba(247, 243, 232, 0.92);
+}
+
+.performance-card .diagram-string-line,
+.performance-card .diagram-fret-line {
+  background: rgba(247, 243, 232, 0.72);
+}
+
+.performance-card .diagram-dot {
+  background: #f7f3e8;
+  box-shadow: 0 0 0 4px rgba(31, 23, 16, 0.95);
 }
 
 @media (max-width: 900px) {
   .grid,
-  .measure-grid,
-  .overview-grid {
+  .overview-grid,
+  .measure-grid {
     grid-template-columns: 1fr;
   }
 }
@@ -424,12 +588,9 @@ input {
     font-size: clamp(1.95rem, 9vw, 2.8rem);
   }
 
-  .timeline-row {
-    flex-direction: column;
-  }
-
-  .recording-actions,
+  .timeline-row,
   .summary-actions,
+  .recording-actions,
   .performance-actions {
     flex-direction: column;
   }
@@ -443,8 +604,8 @@ input {
   }
 
   .performance-card {
-    width: 132px;
-    min-height: 156px;
+    width: 188px;
+    min-height: 250px;
   }
 
   .shape-list {
