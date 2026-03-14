@@ -465,6 +465,14 @@ function App() {
     }));
   }, [analysis]);
 
+  const summaryText = useMemo(() => {
+    if (!analysis) {
+      return "まだ譜面は作成されていません。録音か手動入力から始められます。";
+    }
+
+    return `${analysis.measures.length}小節 / ${chordSummary.length}コード / ${analysis.engine}`;
+  }, [analysis, chordSummary.length]);
+
   useEffect(() => {
     if (!analysis) {
       return;
@@ -807,8 +815,32 @@ function App() {
         </p>
       </header>
 
+      <section className="workspace-bar">
+        <div className="workspace-summary">
+          <strong>現在の状態</strong>
+          <span>{summaryText}</span>
+        </div>
+        <nav className="workspace-tabs" aria-label="quick navigation">
+          <a className="workspace-tab" href="#input-tools">
+            入力
+          </a>
+          <a className="workspace-tab" href="#results">
+            結果
+          </a>
+          <a className="workspace-tab" href="#chord-sheet">
+            コード表
+          </a>
+          <a className="workspace-tab" href="#measure-editor">
+            小節編集
+          </a>
+          <a className="workspace-tab" href="#performance">
+            演奏
+          </a>
+        </nav>
+      </section>
+
       <main className="grid">
-        <section className="panel">
+        <section className="panel" id="input-tools">
           <h2>1. 録音アップロード</h2>
           <label className="upload-box">
             <span>録音ファイルを選択</span>
@@ -878,7 +910,7 @@ function App() {
           </div>
         </section>
 
-        <section className="panel">
+        <section className="panel" id="results">
           <h2>3. コード進行の推定結果</h2>
           {!analysis && (
             <div className="empty-state">
@@ -976,7 +1008,7 @@ function App() {
           )}
         </section>
 
-        <section className="panel full-width">
+        <section className="panel full-width" id="chord-sheet">
           <h2>4. コード表</h2>
           {!analysis && (
             <div className="empty-state">
@@ -1000,7 +1032,7 @@ function App() {
           )}
         </section>
 
-        <section className="panel full-width">
+        <section className="panel full-width" id="measure-editor">
           <h2>5. 小節ごとのコード配置</h2>
           {!analysis && (
             <div className="empty-state">
@@ -1065,7 +1097,7 @@ function App() {
           )}
         </section>
 
-        <section className="panel full-width">
+        <section className="panel full-width" id="performance">
           <h2>6. 演奏モード</h2>
           {!analysis && (
             <div className="empty-state">

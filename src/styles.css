@@ -68,6 +68,44 @@ input {
   gap: 20px;
 }
 
+.workspace-bar {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  padding: 16px 18px;
+  margin-bottom: 20px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 229, 197, 0.12);
+}
+
+.workspace-summary {
+  display: grid;
+  gap: 4px;
+  color: #f3e9d9;
+}
+
+.workspace-summary span {
+  color: #dbc9b1;
+}
+
+.workspace-tabs {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.workspace-tab {
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid rgba(248, 205, 145, 0.22);
+  border-radius: 999px;
+  background: transparent;
+  color: #f3e9d9;
+  text-decoration: none;
+}
+
 .panel {
   padding: 24px;
   border: 1px solid rgba(255, 229, 197, 0.15);
@@ -639,6 +677,11 @@ input {
   .recording-actions,
   .performance-actions {
     flex-direction: column;
+  }
+
+  .workspace-bar {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .performance-stage {
