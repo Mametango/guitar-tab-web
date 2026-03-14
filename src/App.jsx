@@ -21,6 +21,8 @@ const chordShapes = {
   Bm: ["x24432", "799777"],
 };
 
+const stringOpenMidi = [40, 45, 50, 55, 59, 64];
+
 function mergeChunks(chunks) {
   const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
   const result = new Float32Array(totalLength);
@@ -212,6 +214,10 @@ function createMidiBlob(analysis) {
   return new Blob([new Uint8Array([...header, ...events])], { type: "audio/midi" });
 }
 
+function midiToFrequency(midi) {
+  return 440 * 2 ** ((midi - 69) / 12);
+}
+
 function createAnalysisFromChordText(input) {
   const measures = input
     .split("|")
@@ -268,7 +274,7 @@ function normalizeTabShape(shape) {
   return values;
 }
 
-function ChordDiagram({ chord, shape, rhythmPattern, compact = false }) {
+function ChordDiagram({ chord, shape, rhythmPattern, compact = false, onPlay }) {
   const frets = normalizeTabShape(shape);
   const numericFrets = frets
     .map((value) => (value === "x" || value === "0" ? null : Number(value)))
@@ -278,6 +284,11 @@ function ChordDiagram({ chord, shape, rhythmPattern, compact = false }) {
 
   return (
     <article className={`chord-chart-card ${compact ? "chord-chart-card-compact" : ""}`}>
+      {!compact && (
+        <button type="button" className="play-chord-button" onClick={onPlay}>
+          鳴らす
+        </button>
+      )}
       <h3>{chord}</h3>
 
       <div className="diagram-shell">
@@ -378,6 +389,7 @@ function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackMeasure, setPlaybackMeasure] = useState(0);
   const [manualChordText, setManualChordText] = useState("C | G | Am | F");
+  const [audioContextState, setAudioContextState] = useState(null);
   const [analysis, setAnalysis] = useState(() => {
     try {
       const saved = window.localStorage.getItem(storageKey);
@@ -704,6 +716,87 @@ function App() {
     setIsPlaying(false);
   };
 
+  const ensureAudioContext = async () => {
+    const existing = audioContextState;
+    if (existing) {
+      if (existing.state === "suspended") {
+        await existing.resume();
+      }
+      return existing;
+    }
+
+    const nextContext = new window.AudioContext();
+    setAudioContextState(nextContext);
+    return nextContext;
+  };
+
+  const handlePlayChord = async (shape) => {
+    const context = await ensureAudioContext();
+    const frets = normalizeTabShape(shape);
+    const now = context.currentTime;
+
+    frets.forEach((value, index) => {
+      if (value === "x") {
+        return;
+      }
+
+      const fret = value === "0" ? 0 : Number(value);
+      if (!Number.isFinite(fret)) {
+        return;
+      }
+
+      const midi = stringOpenMidi[index] + fret;
+      const frequency = midiToFrequency(midi);
+      const oscillator = context.createOscillator();
+      const gainNode = context.createGain();
+      const startAt = now + index * 0.045;
+
+      oscillator.type = "triangle";
+      oscillator.frequency.setValueAtTime(frequency, startAt);
+      gainNode.gain.setValueAtTime(0.0001, startAt);
+      gainNode.gain.exponentialRampToValueAtTime(0.18, startAt + 0.02);
+      gainNode.gain.exponentialRampToValueAtTime(0.0001, startAt + 1.8);
+
+      oscillator.connect(gainNode);
+      gainNode.connect(context.destination);
+      oscillator.start(startAt);
+      oscillator.stop(startAt + 1.85);
+    });
+  };
+
+  const handleAddChordToken = (token) => {
+    setManualChordText((current) => {
+      const trimmed = current.trim();
+
+      if (!trimmed) {
+        return token === "|" ? "" : token;
+      }
+
+      if (token === "|") {
+        return trimmed.endsWith("|") ? trimmed : `${trimmed} |`;
+      }
+
+      const needsSpacer = trimmed.endsWith("|") ? " " : " | ";
+      return `${trimmed}${needsSpacer}${token}`;
+    });
+  };
+
+  const handleBackspaceChordToken = () => {
+    setManualChordText((current) => {
+      const parts = current
+        .split("|")
+        .map((value) => value.trim())
+        .filter(Boolean);
+
+      parts.pop();
+      return parts.join(" | ");
+    });
+  };
+
+  const handleClearChordText = () => {
+    setManualChordText("");
+  };
+
   return (
     <div className="app-shell">
       <header className="hero">
@@ -750,6 +843,29 @@ function App() {
             <label className="manual-label" htmlFor="manual-chord-text">
               コード進行を `|` 区切りで入力
             </label>
+            <div className="chord-keypad">
+              {chordOptions.map((chord) => (
+                <button
+                  key={chord}
+                  type="button"
+                  className="chord-pad-button"
+                  onClick={() => handleAddChordToken(chord)}
+                >
+                  {chord}
+                </button>
+              ))}
+            </div>
+            <div className="manual-actions">
+              <button type="button" className="ghost-button" onClick={() => handleAddChordToken("|")}>
+                区切りを追加
+              </button>
+              <button type="button" className="ghost-button" onClick={handleBackspaceChordToken}>
+                ひとつ戻す
+              </button>
+              <button type="button" className="ghost-button" onClick={handleClearChordText}>
+                クリア
+              </button>
+            </div>
             <textarea
               id="manual-chord-text"
               className="manual-textarea"
@@ -877,6 +993,7 @@ function App() {
                   chord={item.chord}
                   shape={item.tab}
                   rhythmPattern={item.rhythmPattern}
+                  onPlay={() => handlePlayChord(item.tab)}
                 />
               ))}
             </div>
@@ -997,6 +1114,7 @@ function App() {
                         shape={item.selectedTab}
                         rhythmPattern={item.rhythmPattern}
                         compact
+                        onPlay={() => handlePlayChord(item.selectedTab)}
                       />
                     </div>
                   ))}
