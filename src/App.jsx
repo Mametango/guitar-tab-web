@@ -248,7 +248,7 @@ function createAnalysisFromChordText(input) {
     fileName: "manual-input",
     duration: `00:${String(measures.length * 4).padStart(2, "0")}`,
     engine: "manual-chord-entry",
-    notes: "手動入力から作成したコード進行です。",
+    notes: "手入力したコード進行からコードシートを生成しました。",
     chords,
     measures,
   };
@@ -296,7 +296,7 @@ function ChordDiagram({ chord, shape, rhythmPattern, compact = false, onPlay }) 
         <div className="string-status-row">
           {frets.map((value, index) => (
             <span key={`status-${chord}-${index}`} className="string-status">
-              {value === "x" ? "×" : value === "0" ? "○" : ""}
+              {value === "x" ? "X" : value === "0" ? "O" : ""}
             </span>
           ))}
         </div>
@@ -402,15 +402,15 @@ function App() {
 
   const statusText = useMemo(() => {
     if (isAnalyzing) {
-      return "録音を解析してコード進行を推定しています...";
+      return "音声ファイルを解析してコード進行を作成しています...";
     }
     if (analysis) {
-      return "解析結果を表示中です。あとで本物の音声解析 API に置き換えできます。";
+      return "現在のコード進行を表示中です。手入力でも音声解析でもここに反映されます。";
     }
     if (audioFile) {
-      return "録音または選択したファイルを解析できます。";
+      return "音声ファイルを選択しました。必要なら解析して下の編集画面に取り込めます。";
     }
-    return "録音ファイルを選ぶと、MVP の解析フローを試せます。";
+    return "まずはコードを手入力して進行を作れます。録音やファイル解析は必要なときだけ使えます。";
   }, [analysis, audioFile, isAnalyzing]);
 
   const chordSummary = useMemo(() => {
@@ -467,7 +467,7 @@ function App() {
 
   const summaryText = useMemo(() => {
     if (!analysis) {
-      return "まだ譜面は作成されていません。録音か手動入力から始められます。";
+      return "手入力からすぐにコード進行を作成できます";
     }
 
     return `${analysis.measures.length}小節 / ${chordSummary.length}コード / ${analysis.engine}`;
@@ -525,7 +525,7 @@ function App() {
       });
 
       if (!response.ok) {
-        throw new Error("解析 API の呼び出しに失敗しました。");
+        throw new Error("解析APIの呼び出しに失敗しました。");
       }
 
       const data = await response.json();
@@ -573,17 +573,17 @@ function App() {
           });
 
           setAudioFile(file);
-          setRecordingLabel("WAV録音データをセットしました。解析精度が上がりやすい形式です。");
+          setRecordingLabel("録音をWAVファイルとしてセットしました。必要ならそのまま解析できます。");
           setRecorder(null);
           setIsRecording(false);
         },
       });
 
       setIsRecording(true);
-      setRecordingLabel("録音中です。停止すると WAV ファイルを作成します。");
+      setRecordingLabel("録音中です。停止するとWAVファイルとして取り込みます。");
       setErrorMessage("");
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "マイクの利用を開始できませんでした。");
+      setErrorMessage(error instanceof Error ? error.message : "マイクを開始できませんでした。");
     }
   };
 
@@ -718,7 +718,7 @@ function App() {
 
     setAnalysis(hydrateAnalysis(nextAnalysis));
     setAudioFile(null);
-    setRecordingLabel("手動入力から譜面を作成しました。");
+    setRecordingLabel("手入力のコード進行を作成しました。");
     setErrorMessage("");
     setPlaybackMeasure(0);
     setIsPlaying(false);
@@ -808,10 +808,10 @@ function App() {
   return (
     <div className="app-shell">
       <header className="hero">
-        <p className="eyebrow">Guitar Recording to Chords</p>
-        <h1>録音からコード進行とTAB候補を作る Web アプリ</h1>
+        <p className="eyebrow">Manual Chord Sketch</p>
+        <h1>コード手入力を中心に、すぐ練習用の進行を作れるWebアプリ</h1>
         <p className="hero-copy">
-          iPhone や iPad でも扱いやすいように、録音、解析、修正、書き出しまでを1画面で進められる構成にしています。
+          まずコード進行を手で入れて形にし、必要ならあとから録音や音声ファイル解析を使える構成にしました。
         </p>
       </header>
 
@@ -821,8 +821,11 @@ function App() {
           <span>{summaryText}</span>
         </div>
         <nav className="workspace-tabs" aria-label="quick navigation">
-          <a className="workspace-tab" href="#input-tools">
-            入力
+          <a className="workspace-tab" href="#manual-entry">
+            手入力
+          </a>
+          <a className="workspace-tab" href="#audio-tools">
+            音声取込
           </a>
           <a className="workspace-tab" href="#results">
             結果
@@ -834,46 +837,21 @@ function App() {
             小節編集
           </a>
           <a className="workspace-tab" href="#performance">
-            演奏
+            練習モード
           </a>
         </nav>
       </section>
 
       <main className="grid">
-        <section className="panel" id="input-tools">
-          <h2>1. 録音アップロード</h2>
-          <label className="upload-box">
-            <span>録音ファイルを選択</span>
-            <input type="file" accept="audio/*" onChange={handleFileChange} />
-          </label>
-
-          <div className="recording-actions">
-            <button type="button" className="secondary-button" disabled={isRecording} onClick={handleStartRecording}>
-              録音を開始
-            </button>
-            <button type="button" className="secondary-button" disabled={!isRecording} onClick={handleStopRecording}>
-              録音を停止
-            </button>
-          </div>
-
-          <div className="file-meta">
-            <p>状態: {statusText}</p>
-            <p>ファイル: {audioFile ? audioFile.name : "未選択"}</p>
-            <p>録音: {recordingLabel || "未開始"}</p>
-          </div>
-
-          {errorMessage && <p className="error-text">{errorMessage}</p>}
-
-          <button type="button" className="primary-button" disabled={!audioFile || isAnalyzing} onClick={handleAnalyze}>
-            {isAnalyzing ? "解析中..." : "解析を開始"}
-          </button>
-        </section>
-
-        <section className="panel">
-          <h2>2. 手動入力</h2>
+        <section className="panel" id="manual-entry">
+          <h2>1. コードを手入力</h2>
           <div className="manual-entry">
+            <p className="section-kicker">メイン入力</p>
+            <p className="helper-text">
+              コードボタンを押すか、テキスト欄に直接 `C | G | Am | F` のように入力すると、すぐ下の編集画面に反映できます。
+            </p>
             <label className="manual-label" htmlFor="manual-chord-text">
-              コード進行を `|` 区切りで入力
+              `|` 区切りでコード進行を入力
             </label>
             <div className="chord-keypad">
               {chordOptions.map((chord) => (
@@ -905,17 +883,50 @@ function App() {
               onChange={(event) => setManualChordText(event.target.value)}
             />
             <button type="button" className="primary-button" onClick={handleManualCreate}>
-              手動でコード表を作成
+              この内容でコード進行を作成
             </button>
           </div>
         </section>
 
+        <section className="panel" id="audio-tools">
+          <h2>2. 音声から取り込む</h2>
+          <p className="section-kicker">補助機能</p>
+          <p className="helper-text">
+            手入力が難しいときだけ、録音または音声ファイル解析でコード進行のたたき台を作れます。
+          </p>
+          <label className="upload-box">
+            <span>音声ファイルを選択</span>
+            <input type="file" accept="audio/*" onChange={handleFileChange} />
+          </label>
+
+          <div className="recording-actions">
+            <button type="button" className="secondary-button" disabled={isRecording} onClick={handleStartRecording}>
+              録音を開始
+            </button>
+            <button type="button" className="secondary-button" disabled={!isRecording} onClick={handleStopRecording}>
+              録音を停止
+            </button>
+          </div>
+
+          <div className="file-meta">
+            <p>状態: {statusText}</p>
+            <p>ファイル: {audioFile ? audioFile.name : "未選択"}</p>
+            <p>録音: {recordingLabel || "まだ使っていません"}</p>
+          </div>
+
+          {errorMessage && <p className="error-text">{errorMessage}</p>}
+
+          <button type="button" className="primary-button" disabled={!audioFile || isAnalyzing} onClick={handleAnalyze}>
+            {isAnalyzing ? "解析中..." : "音声からコード進行を作成"}
+          </button>
+        </section>
+
         <section className="panel" id="results">
-          <h2>3. コード進行の推定結果</h2>
+          <h2>3. コード進行の結果</h2>
           {!analysis && (
             <div className="empty-state">
-              <p>解析結果はここに表示されます。</p>
-              <p>将来はここをバックエンド API のレスポンスで置き換えます。</p>
+              <p>まだコード進行は作成されていません。</p>
+              <p>まずは手入力から始めると最短で確認できます。必要なら音声解析も使えます。</p>
             </div>
           )}
 
@@ -948,28 +959,28 @@ function App() {
               </div>
 
               <div className="summary-card">
-                <p>入力ファイル: {analysis.fileName}</p>
-                <p>推定長さ: {analysis.duration}</p>
-                <p>解析エンジン: {analysis.engine}</p>
+                <p>入力元: {analysis.fileName}</p>
+                <p>長さ: {analysis.duration}</p>
+                <p>生成方法: {analysis.engine}</p>
                 <div className="summary-actions">
                   <button type="button" className="ghost-button" onClick={handleExportJson}>
                     JSONを書き出す
                   </button>
                   <button type="button" className="ghost-button" onClick={handleExportText}>
-                    テキスト譜を書き出す
+                    テキストを書き出す
                   </button>
                   <button type="button" className="ghost-button" onClick={handleExportMidi}>
                     MIDIを書き出す
                   </button>
                   <button type="button" className="ghost-button" onClick={handleClearSaved}>
-                    保存結果をクリア
+                    結果をクリア
                   </button>
                 </div>
               </div>
 
               <div className="timeline">
                 {analysis.chords.map((item, index) => (
-                  <article key={`${item.time}-${item.chord}`} className="timeline-row">
+                  <article key={`${item.time}-${item.chord}-${index}`} className="timeline-row">
                     <div className="timeline-meta">
                       <p className="time-label">{item.time}</p>
                       <select
@@ -985,7 +996,7 @@ function App() {
                       </select>
                     </div>
                     <div className="shape-list">
-                      {(item.tabCandidates?.length ? item.tabCandidates : ["候補なし"]).map((shape) => (
+                      {(item.tabCandidates?.length ? item.tabCandidates : ["TAB候補なし"]).map((shape) => (
                         <button
                           key={shape}
                           type="button"
@@ -997,7 +1008,7 @@ function App() {
                       ))}
                     </div>
                     <p className="selected-tab">
-                      選択中TAB: <code>{item.selectedTab || "未選択"}</code>
+                      選択中TAB: <code>{item.selectedTab || "TAB未選択"}</code>
                     </p>
                   </article>
                 ))}
@@ -1012,8 +1023,8 @@ function App() {
           <h2>4. コード表</h2>
           {!analysis && (
             <div className="empty-state">
-              <p>解析後にコードダイアグラムとストロークの見本が表示されます。</p>
-              <p>実際にギターを弾くときの見本シートとして使えます。</p>
+              <p>コードダイアグラムはまだ表示されていません。</p>
+              <p>手入力または音声解析で進行を作ると、すぐに確認できます。</p>
             </div>
           )}
 
@@ -1033,11 +1044,11 @@ function App() {
         </section>
 
         <section className="panel full-width" id="measure-editor">
-          <h2>5. 小節ごとのコード配置</h2>
+          <h2>5. 小節ごとの編集</h2>
           {!analysis && (
             <div className="empty-state">
-              <p>解析後に小節カードが表示されます。</p>
-              <p>コード、TAB、簡易リズムを小節単位で整えられます。</p>
+              <p>小節カードはまだ表示されていません。</p>
+              <p>コード進行を作成すると、TABとリズムを小節単位で整えられます。</p>
             </div>
           )}
 
@@ -1067,7 +1078,7 @@ function App() {
                   </p>
 
                   <label className="rhythm-field">
-                    <span>簡易リズム</span>
+                    <span>リズムパターン</span>
                     <input
                       className="rhythm-input"
                       value={measure.rhythmPattern}
@@ -1076,7 +1087,7 @@ function App() {
                   </label>
 
                   <div className="shape-list">
-                    {(measure.tabCandidates?.length ? measure.tabCandidates : ["候補なし"]).map((shape) => (
+                    {(measure.tabCandidates?.length ? measure.tabCandidates : ["TAB候補なし"]).map((shape) => (
                       <button
                         key={shape}
                         type="button"
@@ -1089,7 +1100,7 @@ function App() {
                   </div>
 
                   <p className="selected-tab">
-                    TAB候補: <code>{measure.selectedTab || "未選択"}</code>
+                    TAB: <code>{measure.selectedTab || "TAB未選択"}</code>
                   </p>
                 </article>
               ))}
@@ -1098,11 +1109,11 @@ function App() {
         </section>
 
         <section className="panel full-width" id="performance">
-          <h2>6. 演奏モード</h2>
+          <h2>6. 練習モード</h2>
           {!analysis && (
             <div className="empty-state">
-              <p>解析後に横スクロールのコードレーンが表示されます。</p>
-              <p>演奏しながら次のコードとストロークを先読みできます。</p>
+              <p>練習用のスクロール表示はまだありません。</p>
+              <p>コード進行を作成すると、次のコードを追いながら練習できます。</p>
             </div>
           )}
 
@@ -1115,7 +1126,7 @@ function App() {
                   disabled={isPlaying}
                   onClick={handleStartPlayback}
                 >
-                  演奏レーンを再生
+                  練習レーンを開始
                 </button>
                 <button
                   type="button"

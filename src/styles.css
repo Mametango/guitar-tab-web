@@ -209,6 +209,21 @@ input {
   gap: 12px;
 }
 
+.section-kicker {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #f2bb78;
+}
+
+.helper-text {
+  margin: 0;
+  color: #dbc9b1;
+  line-height: 1.7;
+}
+
 .chord-keypad {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
