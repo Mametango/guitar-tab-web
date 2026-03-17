@@ -771,7 +771,13 @@ export default function App() {
       );
       setPlaybackMeasure(0);
       setIsPlaying(false);
-      setSaveMessage("YouTube URL からセクション下書きを作成しました。コード候補を調整して保存できます。");
+      setSaveMessage(
+        data.importMode === "delegated"
+          ? "外部の YouTube 解析バックエンドで音声を処理しました。コード候補を確認して保存できます。"
+          : data.importMode === "extracted"
+          ? "YouTube 音声を抽出して解析しました。コード候補を確認して保存できます。"
+          : "YouTube URL からドラフト譜面を作成しました。現在の環境では音声抽出できないため、コード候補を手で調整してください。",
+      );
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "YouTube URL の取り込みに失敗しました。");
     } finally {
@@ -1167,7 +1173,7 @@ export default function App() {
           <div className="editor-grid">
             <section className="editor-card">
               <p className="section-kicker">YouTube URL</p>
-              <p className="helper-text">まずは URL からセクション付きの下書き譜面を作ります。あとでコードと TAB を手で整える前提です。</p>
+              <p className="helper-text">外部の YouTube 解析バックエンドが接続されていればそこへ委譲し、なければローカル抽出を試し、最後はドラフトへフォールバックします。</p>
               <label className="field-stack">
                 <span>YouTube の URL</span>
                 <input

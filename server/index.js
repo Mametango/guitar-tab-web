@@ -2,7 +2,7 @@ import cors from "cors";
 import express from "express";
 import multer from "multer";
 import { analyzeRecording } from "./services/analyzeRecording.js";
-import { createYoutubeDraft } from "./services/createYoutubeDraft.js";
+import { importYoutubeUrl } from "./services/importYoutubeUrl.js";
 import { defaultAuthor, getScore, listScores, saveScore } from "./services/scoreStore.js";
 
 const app = express();
@@ -107,8 +107,8 @@ app.post("/api/import-youtube", async (request, response) => {
       return;
     }
 
-    const draft = createYoutubeDraft(youtubeUrl);
-    response.json(draft);
+    const imported = await importYoutubeUrl(youtubeUrl);
+    response.json(imported);
   } catch (error) {
     response.status(400).json({
       error: "failed to import youtube url",
