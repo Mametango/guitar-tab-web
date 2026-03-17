@@ -2,6 +2,7 @@ import cors from "cors";
 import express from "express";
 import multer from "multer";
 import { analyzeRecording } from "./services/analyzeRecording.js";
+import { createYoutubeDraft } from "./services/createYoutubeDraft.js";
 import { defaultAuthor, getScore, listScores, saveScore } from "./services/scoreStore.js";
 
 const app = express();
@@ -90,6 +91,27 @@ app.post("/api/analyze", upload.single("audio"), async (request, response) => {
   } catch (error) {
     response.status(500).json({
       error: "failed to analyze recording",
+      detail: error instanceof Error ? error.message : "unknown error",
+    });
+  }
+});
+
+app.post("/api/import-youtube", async (request, response) => {
+  try {
+    const youtubeUrl = String(request.body?.url || "").trim();
+
+    if (!youtubeUrl) {
+      response.status(400).json({
+        error: "youtube url is required",
+      });
+      return;
+    }
+
+    const draft = createYoutubeDraft(youtubeUrl);
+    response.json(draft);
+  } catch (error) {
+    response.status(400).json({
+      error: "failed to import youtube url",
       detail: error instanceof Error ? error.message : "unknown error",
     });
   }

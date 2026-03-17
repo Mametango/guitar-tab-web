@@ -357,8 +357,10 @@ export default function App() {
   const [selectedSectionId, setSelectedSectionId] = useState(defaultDraft.score.sections[0]?.id || "");
   const [playSectionId, setPlaySectionId] = useState(defaultDraft.score.sections[0]?.id || "");
   const [publicScores, setPublicScores] = useState([]);
+  const [youtubeUrl, setYoutubeUrl] = useState("");
   const [audioFile, setAudioFile] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isImportingYoutube, setIsImportingYoutube] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingScore, setIsLoadingScore] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -730,6 +732,50 @@ export default function App() {
       setErrorMessage(error instanceof Error ? error.message : "音声解析に失敗しました。");
     } finally {
       setIsAnalyzing(false);
+    }
+  };
+
+  const handleImportYoutube = async () => {
+    if (!youtubeUrl.trim()) {
+      setErrorMessage("YouTube URL を入力してください。");
+      return;
+    }
+
+    setIsImportingYoutube(true);
+    setErrorMessage("");
+
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/import-youtube`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          url: youtubeUrl.trim(),
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.detail || "YouTube URL から下書きを作れませんでした。");
+      }
+
+      const data = await response.json();
+      const hydrated = hydrateScore(data);
+      setScoreTitle(data.title || scoreTitle);
+      setScore(hydrated);
+      setSelectedSectionId(hydrated.sections[0]?.id || "");
+      setPlaySectionId(hydrated.sections[0]?.id || "");
+      setManualSectionText(
+        hydrated.sections.map((section) => `[${section.name}] ${section.measures.map((measure) => measure.chord).join(" | ")}`).join("\n"),
+      );
+      setPlaybackMeasure(0);
+      setIsPlaying(false);
+      setSaveMessage("YouTube URL からセクション下書きを作成しました。コード候補を調整して保存できます。");
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "YouTube URL の取り込みに失敗しました。");
+    } finally {
+      setIsImportingYoutube(false);
     }
   };
 
@@ -1119,6 +1165,30 @@ export default function App() {
           </label>
 
           <div className="editor-grid">
+            <section className="editor-card">
+              <p className="section-kicker">YouTube URL</p>
+              <p className="helper-text">まずは URL からセクション付きの下書き譜面を作ります。あとでコードと TAB を手で整える前提です。</p>
+              <label className="field-stack">
+                <span>YouTube の URL</span>
+                <input
+                  className="text-input"
+                  value={youtubeUrl}
+                  onChange={(event) => setYoutubeUrl(event.target.value)}
+                  placeholder="https://www.youtube.com/watch?v=..."
+                />
+              </label>
+              <div className="button-row">
+                <button
+                  type="button"
+                  className="primary-button"
+                  disabled={isImportingYoutube}
+                  onClick={handleImportYoutube}
+                >
+                  {isImportingYoutube ? "下書き作成中..." : "YouTube から下書き作成"}
+                </button>
+              </div>
+            </section>
+
             <section className="editor-card">
               <p className="section-kicker">セクション入力</p>
               <p className="helper-text">`[Aメロ] C | G | Am | F` のように、セクションごとにまとめて入力できます。</p>
