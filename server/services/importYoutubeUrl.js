@@ -1,10 +1,14 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { access, mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 import { analyzeRecording } from "./analyzeRecording.js";
 import { createYoutubeDraft } from "./createYoutubeDraft.js";
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const workspaceToolsDir = path.resolve(__dirname, "../../tools");
 const externalBackendUrl = process.env.YOUTUBE_IMPORT_BACKEND_URL?.trim() || "";
 const externalBackendToken = process.env.YOUTUBE_IMPORT_BACKEND_TOKEN?.trim() || "";
 
@@ -38,27 +42,65 @@ function runCommand(command, args, options = {}) {
   });
 }
 
-async function commandExists(command) {
-  const checker = process.platform === "win32" ? "where" : "which";
-
+async function fileExists(targetPath) {
   try {
-    await runCommand(checker, [command], { windowsHide: true });
+    await access(targetPath);
     return true;
   } catch {
     return false;
   }
 }
 
+async function resolveCommand(command) {
+  const localCandidates = {
+    "yt-dlp": [
+      path.join(workspaceToolsDir, "yt-dlp", "yt-dlp.exe"),
+      path.join(workspaceToolsDir, "yt-dlp.exe"),
+    ],
+    ffmpeg: [
+      path.join(workspaceToolsDir, "ffmpeg", "bin", "ffmpeg.exe"),
+      path.join(workspaceToolsDir, "ffmpeg", "ffmpeg-8.1-essentials_build", "bin", "ffmpeg.exe"),
+      path.join(workspaceToolsDir, "ffmpeg.exe"),
+    ],
+    deno: [
+      path.join(workspaceToolsDir, "deno", "deno.exe"),
+      path.join(workspaceToolsDir, "deno.exe"),
+    ],
+  };
+
+  for (const candidate of localCandidates[command] ?? []) {
+    if (await fileExists(candidate)) {
+      return candidate;
+    }
+  }
+
+  const checker = process.platform === "win32" ? "where" : "which";
+
+  try {
+    const result = await runCommand(checker, [command], { windowsHide: true });
+    const match = result.stdout
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .find(Boolean);
+
+    return match || null;
+  } catch {
+    return null;
+  }
+}
+
 async function getToolStatus() {
-  const [hasYtDlp, hasFfmpeg] = await Promise.all([
-    commandExists("yt-dlp"),
-    commandExists("ffmpeg"),
+  const [ytDlpPath, ffmpegPath, denoPath] = await Promise.all([
+    resolveCommand("yt-dlp"),
+    resolveCommand("ffmpeg"),
+    resolveCommand("deno"),
   ]);
 
   return {
-    hasYtDlp,
-    hasFfmpeg,
-    canExtract: hasYtDlp && hasFfmpeg,
+    ytDlpPath,
+    ffmpegPath,
+    denoPath,
+    canExtract: Boolean(ytDlpPath && ffmpegPath && denoPath),
   };
 }
 
@@ -105,28 +147,41 @@ async function tryLocalExtraction(url) {
   const wavPath = path.join(tempDir, "audio.wav");
 
   try {
-    const info = await runCommand("yt-dlp", [
+    const ytDlpEnv = {
+      ...process.env,
+      PATH: `${path.dirname(toolStatus.ytDlpPath)};${path.dirname(toolStatus.ffmpegPath)};${path.dirname(toolStatus.denoPath)};${process.env.PATH || ""}`,
+      TEMP: tempDir,
+      TMP: tempDir,
+    };
+
+    const info = await runCommand(toolStatus.ytDlpPath, [
       "--print",
       "%(title)s",
       "--no-playlist",
+      "--js-runtimes",
+      `deno:${toolStatus.denoPath}`,
       url,
-    ], { windowsHide: true });
+    ], { windowsHide: true, env: ytDlpEnv });
 
     const rawTitle = info.stdout.trim().split(/\r?\n/).filter(Boolean).pop() || "youtube-audio";
 
-    await runCommand("yt-dlp", [
+    await runCommand(toolStatus.ytDlpPath, [
       "--no-playlist",
+      "--js-runtimes",
+      `deno:${toolStatus.denoPath}`,
       "-f",
       "bestaudio",
       "-x",
       "--audio-format",
       "wav",
+      "--ffmpeg-location",
+      toolStatus.ffmpegPath,
       "--postprocessor-args",
-      "ffmpeg:-ac 1 -ar 44100 -sample_fmt s16",
+      `ffmpeg:-ac 1 -ar 44100 -sample_fmt s16`,
       "-o",
       wavPath,
       url,
-    ], { windowsHide: true });
+    ], { windowsHide: true, env: ytDlpEnv });
 
     const buffer = await readFile(wavPath);
     const result = await analyzeRecording({
@@ -158,7 +213,7 @@ function buildFallbackDraft(url) {
     reasons.push("no external YouTube backend is configured");
   }
 
-  reasons.push("yt-dlp and ffmpeg are not available in the current runtime");
+  reasons.push("yt-dlp, ffmpeg, and deno are not all available in the current runtime");
 
   return {
     ...draft,

@@ -1193,6 +1193,13 @@ export default function App() {
                   {isImportingYoutube ? "下書き作成中..." : "YouTube から下書き作成"}
                 </button>
               </div>
+              <div className="callout-box">
+                <strong>公開サイトで使う方へ</strong>
+                <p>
+                  Vercel 版では YouTube 音声の実抽出バックエンドが未接続だと、まずドラフト譜面を作ります。
+                  本格解析を使いたい場合は、抽出対応バックエンドに接続した版か、ローカル抽出版を使ってください。
+                </p>
+              </div>
             </section>
 
             <section className="editor-card">

@@ -302,6 +302,21 @@ button {
   border: 1px dashed rgba(255, 214, 163, 0.26);
 }
 
+.callout-box {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(240, 200, 134, 0.1);
+  border: 1px solid rgba(240, 200, 134, 0.22);
+  color: #f6dfbd;
+}
+
+.callout-box p,
+.callout-box strong {
+  margin: 0;
+}
+
 .panel-footer {
   display: grid;
   gap: 14px;
