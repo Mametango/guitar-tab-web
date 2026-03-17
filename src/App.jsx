@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim() || "";
-const storageKey = "guitar-tab-web:last-analysis";
-
+const defaultAuthorName = "名無しの弾き語りさん";
 const chordOptions = ["C", "Cm", "D", "Dm", "E", "Em", "F", "Fm", "G", "Gm", "A", "Am", "B", "Bm"];
 const chordShapes = {
   C: ["x32010", "x35553"],
@@ -20,239 +19,7 @@ const chordShapes = {
   B: ["x24442", "799877"],
   Bm: ["x24432", "799777"],
 };
-
 const stringOpenMidi = [40, 45, 50, 55, 59, 64];
-
-function mergeChunks(chunks) {
-  const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
-  const result = new Float32Array(totalLength);
-  let offset = 0;
-
-  for (const chunk of chunks) {
-    result.set(chunk, offset);
-    offset += chunk.length;
-  }
-
-  return result;
-}
-
-function encodeWav(samples, sampleRate) {
-  const buffer = new ArrayBuffer(44 + samples.length * 2);
-  const view = new DataView(buffer);
-
-  const writeString = (offset, value) => {
-    for (let index = 0; index < value.length; index += 1) {
-      view.setUint8(offset + index, value.charCodeAt(index));
-    }
-  };
-
-  writeString(0, "RIFF");
-  view.setUint32(4, 36 + samples.length * 2, true);
-  writeString(8, "WAVE");
-  writeString(12, "fmt ");
-  view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true);
-  view.setUint16(22, 1, true);
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * 2, true);
-  view.setUint16(32, 2, true);
-  view.setUint16(34, 16, true);
-  writeString(36, "data");
-  view.setUint32(40, samples.length * 2, true);
-
-  let offset = 44;
-  for (let index = 0; index < samples.length; index += 1) {
-    const sample = Math.max(-1, Math.min(1, samples[index]));
-    view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
-    offset += 2;
-  }
-
-  return new Blob([buffer], { type: "audio/wav" });
-}
-
-function downloadTextFile(fileName, content, type) {
-  const blob = new Blob([content], { type });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = fileName;
-  anchor.click();
-  URL.revokeObjectURL(url);
-}
-
-function downloadBlob(fileName, blob) {
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = fileName;
-  anchor.click();
-  URL.revokeObjectURL(url);
-}
-
-function buildExportPayload(analysis) {
-  return {
-    fileName: analysis.fileName,
-    duration: analysis.duration,
-    engine: analysis.engine,
-    notes: analysis.notes,
-    exportedAt: new Date().toISOString(),
-    measures: analysis.measures.map((measure) => ({
-      number: measure.number,
-      startTime: measure.startTime,
-      chord: measure.chord,
-      beats: measure.beats,
-      subdivision: measure.subdivision,
-      rhythmPattern: measure.rhythmPattern,
-      selectedTab: measure.selectedTab,
-      tabCandidates: measure.tabCandidates,
-    })),
-  };
-}
-
-function buildChordChartText(analysis) {
-  const header = [
-    "Guitar Chord Chart",
-    `File: ${analysis.fileName}`,
-    `Duration: ${analysis.duration}`,
-    `Engine: ${analysis.engine}`,
-    "",
-  ];
-
-  const measures = analysis.measures.map((measure) =>
-    `#${measure.number} ${measure.startTime} | ${measure.chord} | ${measure.subdivision} | ${measure.rhythmPattern} | TAB ${measure.selectedTab || "-"}`,
-  );
-
-  return [...header, ...measures, "", `Notes: ${analysis.notes}`].join("\n");
-}
-
-function writeVariableLength(value) {
-  let buffer = value & 0x7f;
-  const bytes = [];
-
-  while ((value >>= 7)) {
-    buffer <<= 8;
-    buffer |= (value & 0x7f) | 0x80;
-  }
-
-  while (true) {
-    bytes.push(buffer & 0xff);
-    if (buffer & 0x80) {
-      buffer >>= 8;
-    } else {
-      break;
-    }
-  }
-
-  return bytes;
-}
-
-function chordToMidiNotes(chordName) {
-  const normalized = chordName.trim();
-  const isMinor = normalized.endsWith("m");
-  const rootName = isMinor ? normalized.slice(0, -1) : normalized;
-  const rootMap = {
-    C: 60,
-    "C#": 61,
-    D: 62,
-    "D#": 63,
-    E: 64,
-    F: 65,
-    "F#": 66,
-    G: 67,
-    "G#": 68,
-    A: 69,
-    "A#": 70,
-    B: 71,
-  };
-  const root = rootMap[rootName];
-
-  if (root === undefined) {
-    return [60, 64, 67];
-  }
-
-  return isMinor ? [root, root + 3, root + 7] : [root, root + 4, root + 7];
-}
-
-function createMidiBlob(analysis) {
-  const ticksPerQuarter = 480;
-  const ticksPerMeasure = ticksPerQuarter * 4;
-  const events = [];
-
-  events.push(0x00, 0xff, 0x51, 0x03, 0x07, 0xa1, 0x20);
-  events.push(0x00, 0xc0, 0x18);
-
-  for (const measure of analysis.measures) {
-    const notes = chordToMidiNotes(measure.chord);
-
-    events.push(0x00, 0x90, notes[0], 96);
-    for (let index = 1; index < notes.length; index += 1) {
-      events.push(0x00, 0x90, notes[index], 84);
-    }
-
-    events.push(...writeVariableLength(ticksPerMeasure), 0x80, notes[0], 0);
-    for (let index = 1; index < notes.length; index += 1) {
-      events.push(0x00, 0x80, notes[index], 0);
-    }
-  }
-
-  events.push(0x00, 0xff, 0x2f, 0x00);
-
-  const trackLength = events.length;
-  const header = [
-    0x4d, 0x54, 0x68, 0x64,
-    0x00, 0x00, 0x00, 0x06,
-    0x00, 0x00,
-    0x00, 0x01,
-    (ticksPerQuarter >> 8) & 0xff, ticksPerQuarter & 0xff,
-    0x4d, 0x54, 0x72, 0x6b,
-    (trackLength >> 24) & 0xff,
-    (trackLength >> 16) & 0xff,
-    (trackLength >> 8) & 0xff,
-    trackLength & 0xff,
-  ];
-
-  return new Blob([new Uint8Array([...header, ...events])], { type: "audio/midi" });
-}
-
-function midiToFrequency(midi) {
-  return 440 * 2 ** ((midi - 69) / 12);
-}
-
-function createAnalysisFromChordText(input) {
-  const measures = input
-    .split("|")
-    .map((value) => value.trim())
-    .filter(Boolean)
-    .map((chord, index) => {
-      const tabCandidates = chordShapes[chord] ?? [];
-      return {
-        number: index + 1,
-        startTime: `0:${String(index * 4).padStart(2, "0")}`,
-        chord,
-        beats: 4,
-        subdivision: "4/4",
-        rhythmPattern: "Down-Up x4",
-        tabCandidates,
-        selectedTab: tabCandidates[0] ?? "",
-      };
-    });
-
-  const chords = measures.map((measure) => ({
-    time: measure.startTime,
-    chord: measure.chord,
-    tabCandidates: measure.tabCandidates,
-    selectedTab: measure.selectedTab,
-  }));
-
-  return {
-    fileName: "manual-input",
-    duration: `00:${String(measures.length * 4).padStart(2, "0")}`,
-    engine: "manual-chord-entry",
-    notes: "手入力したコード進行からコードシートを生成しました。",
-    chords,
-    measures,
-  };
-}
 
 function normalizeTabShape(shape) {
   if (!shape) {
@@ -274,7 +41,105 @@ function normalizeTabShape(shape) {
   return values;
 }
 
-function ChordDiagram({ chord, shape, rhythmPattern, compact = false, onPlay }) {
+function midiToFrequency(midi) {
+  return 440 * 2 ** ((midi - 69) / 12);
+}
+
+function createMeasure(chord, index) {
+  const tabCandidates = chordShapes[chord] ?? [];
+  return {
+    number: index + 1,
+    startTime: `0:${String(index * 4).padStart(2, "0")}`,
+    chord,
+    beats: 4,
+    subdivision: "4/4",
+    rhythmPattern: "Down-Up x4",
+    tabCandidates,
+    selectedTab: tabCandidates[0] ?? "",
+  };
+}
+
+function createAnalysisFromChordText(input) {
+  const measures = input
+    .split("|")
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .map((chord, index) => createMeasure(chord, index));
+
+  return {
+    fileName: "manual-input",
+    duration: `00:${String(measures.length * 4).padStart(2, "0")}`,
+    engine: "manual-chord-entry",
+    notes: "PCで入力したコード進行です。必要に応じてTABとリズムを調整して公開できます。",
+    chords: measures.map((measure) => ({
+      time: measure.startTime,
+      chord: measure.chord,
+      tabCandidates: measure.tabCandidates,
+      selectedTab: measure.selectedTab,
+    })),
+    measures,
+  };
+}
+
+function createDefaultDraft() {
+  const chordText = "C | G | Am | F";
+  return {
+    title: "新しい譜面",
+    chordText,
+    analysis: hydrateAnalysis(createAnalysisFromChordText(chordText)),
+  };
+}
+
+function hydrateAnalysis(data) {
+  if (!data) {
+    return null;
+  }
+
+  const measures = (data.measures ?? []).map((measure, index) => {
+    const tabCandidates = measure.tabCandidates?.length ? measure.tabCandidates : (chordShapes[measure.chord] ?? []);
+    return {
+      number: measure.number ?? index + 1,
+      startTime: measure.startTime ?? `0:${String(index * 4).padStart(2, "0")}`,
+      chord: measure.chord ?? "C",
+      beats: measure.beats ?? 4,
+      subdivision: measure.subdivision ?? "4/4",
+      rhythmPattern: measure.rhythmPattern ?? "Down-Up x4",
+      tabCandidates,
+      selectedTab: measure.selectedTab ?? tabCandidates[0] ?? "",
+    };
+  });
+
+  const chords = measures.map((measure) => ({
+    time: measure.startTime,
+    chord: measure.chord,
+    tabCandidates: measure.tabCandidates,
+    selectedTab: measure.selectedTab,
+  }));
+
+  return {
+    ...data,
+    fileName: data.fileName ?? "manual-input",
+    duration: data.duration ?? `00:${String(measures.length * 4).padStart(2, "0")}`,
+    engine: data.engine ?? "manual-chord-entry",
+    notes: data.notes ?? "",
+    chords,
+    measures,
+  };
+}
+
+function getRoute() {
+  const parts = window.location.pathname.split("/").filter(Boolean);
+  const mode = parts[0] === "play" ? "play" : "edit";
+  const scoreId = parts.length > 1 ? parts[1] : "";
+  return { mode, scoreId };
+}
+
+function navigateTo(pathname) {
+  window.history.pushState({}, "", pathname);
+  window.dispatchEvent(new PopStateEvent("popstate"));
+}
+
+function ChordDiagram({ chord, shape, rhythmPattern, onPlay }) {
   const frets = normalizeTabShape(shape);
   const numericFrets = frets
     .map((value) => (value === "x" || value === "0" ? null : Number(value)))
@@ -283,25 +148,21 @@ function ChordDiagram({ chord, shape, rhythmPattern, compact = false, onPlay }) 
   const baseFret = minFret > 1 ? minFret : 1;
 
   return (
-    <article className={`chord-chart-card ${compact ? "chord-chart-card-compact" : ""}`}>
-      {!compact && (
-        <button type="button" className="play-chord-button" onClick={onPlay}>
-          鳴らす
-        </button>
-      )}
+    <article className="chord-card">
+      <button type="button" className="ghost-button inline-action" onClick={onPlay}>
+        音を鳴らす
+      </button>
       <h3>{chord}</h3>
-
       <div className="diagram-shell">
         {baseFret > 1 && <span className="base-fret">{baseFret}fr</span>}
         <div className="string-status-row">
           {frets.map((value, index) => (
-            <span key={`status-${chord}-${index}`} className="string-status">
+            <span key={`${chord}-${index}`} className="string-status">
               {value === "x" ? "X" : value === "0" ? "O" : ""}
             </span>
           ))}
         </div>
-
-        <div className="diagram-grid" aria-label={`${chord} diagram`}>
+        <div className="diagram-grid" aria-label={`${chord} chord diagram`}>
           {Array.from({ length: 4 }).map((_, fretIndex) => (
             <div key={`fret-${fretIndex}`} className="diagram-fret-line" style={{ top: `${fretIndex * 25}%` }} />
           ))}
@@ -312,7 +173,6 @@ function ChordDiagram({ chord, shape, rhythmPattern, compact = false, onPlay }) 
               style={{ left: `${stringIndex * 20}%` }}
             />
           ))}
-
           {frets.map((value, stringIndex) => {
             if (value === "x" || value === "0") {
               return null;
@@ -337,81 +197,41 @@ function ChordDiagram({ chord, shape, rhythmPattern, compact = false, onPlay }) 
           })}
         </div>
       </div>
-
-      {!compact && <p className="diagram-tab">{shape || "TAB未選択"}</p>}
-      {!compact && <p className="diagram-rhythm">{rhythmPattern || "Down-Up x4"}</p>}
+      <p className="diagram-tab">{shape || "TABなし"}</p>
+      <p className="diagram-rhythm">{rhythmPattern || "Down-Up x4"}</p>
     </article>
   );
 }
 
-function hydrateAnalysis(data) {
-  if (!data) {
-    return null;
-  }
-
-  const chords = (data.chords ?? []).map((item) => ({
-    ...item,
-    tabCandidates: item.tabCandidates?.length ? item.tabCandidates : (chordShapes[item.chord] ?? []),
-    selectedTab: item.selectedTab ?? item.tabCandidates?.[0] ?? chordShapes[item.chord]?.[0] ?? "",
-  }));
-
-  const measures = (
-    data.measures ??
-    chords.map((item, index) => ({
-      number: index + 1,
-      startTime: item.time,
-      chord: item.chord,
-      beats: 4,
-      subdivision: "4/4",
-      rhythmPattern: "Down-Up x4",
-      tabCandidates: item.tabCandidates,
-      selectedTab: item.selectedTab,
-    }))
-  ).map((item) => ({
-    ...item,
-    tabCandidates: item.tabCandidates?.length ? item.tabCandidates : (chordShapes[item.chord] ?? []),
-    selectedTab: item.selectedTab ?? item.tabCandidates?.[0] ?? chordShapes[item.chord]?.[0] ?? "",
-  }));
-
-  return {
-    ...data,
-    chords,
-    measures,
-  };
-}
-
 function App() {
+  const defaultDraft = createDefaultDraft();
+  const [route, setRoute] = useState(() => getRoute());
+  const [scoreTitle, setScoreTitle] = useState(defaultDraft.title);
+  const [manualChordText, setManualChordText] = useState(defaultDraft.chordText);
+  const [analysis, setAnalysis] = useState(defaultDraft.analysis);
+  const [scoreId, setScoreId] = useState(() => getRoute().scoreId);
+  const [publicScores, setPublicScores] = useState([]);
   const [audioFile, setAudioFile] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const [recorder, setRecorder] = useState(null);
-  const [recordingLabel, setRecordingLabel] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [isLoadingScore, setIsLoadingScore] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackMeasure, setPlaybackMeasure] = useState(0);
-  const [manualChordText, setManualChordText] = useState("C | G | Am | F");
-  const [audioContextState, setAudioContextState] = useState(null);
-  const [analysis, setAnalysis] = useState(() => {
-    try {
-      const saved = window.localStorage.getItem(storageKey);
-      return saved ? hydrateAnalysis(JSON.parse(saved)) : null;
-    } catch {
-      return null;
-    }
-  });
+  const [tempoBpm, setTempoBpm] = useState(72);
+  const [recordingLabel, setRecordingLabel] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [saveMessage, setSaveMessage] = useState("");
+  const [audioContextState, setAudioContextState] = useState(null);
+  const [recorder, setRecorder] = useState(null);
+  const [isRecording, setIsRecording] = useState(false);
 
-  const statusText = useMemo(() => {
-    if (isAnalyzing) {
-      return "音声ファイルを解析してコード進行を作成しています...";
+  const shareUrl = useMemo(() => {
+    if (!scoreId) {
+      return "";
     }
-    if (analysis) {
-      return "現在のコード進行を表示中です。手入力でも音声解析でもここに反映されます。";
-    }
-    if (audioFile) {
-      return "音声ファイルを選択しました。必要なら解析して下の編集画面に取り込めます。";
-    }
-    return "まずはコードを手入力して進行を作れます。録音やファイル解析は必要なときだけ使えます。";
-  }, [analysis, audioFile, isAnalyzing]);
+
+    return `${window.location.origin}/play/${scoreId}`;
+  }, [scoreId]);
 
   const chordSummary = useMemo(() => {
     if (!analysis) {
@@ -419,92 +239,119 @@ function App() {
     }
 
     const seen = new Set();
+    return analysis.measures.filter((measure) => {
+      if (seen.has(measure.chord)) {
+        return false;
+      }
 
-    return analysis.measures
-      .map((measure) => ({
-        chord: measure.chord,
-        tab: measure.selectedTab || measure.tabCandidates?.[0] || "",
-        rhythmPattern: measure.rhythmPattern,
-      }))
-      .filter((item) => {
-        if (seen.has(item.chord)) {
-          return false;
-        }
-
-        seen.add(item.chord);
-        return true;
-      });
+      seen.add(measure.chord);
+      return true;
+    });
   }, [analysis]);
-
-  const strokeSummary = useMemo(() => {
-    if (!analysis) {
-      return [];
-    }
-
-    const counts = new Map();
-
-    for (const measure of analysis.measures) {
-      const key = measure.rhythmPattern?.trim() || "未設定";
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-    }
-
-    return Array.from(counts.entries()).map(([pattern, count]) => ({
-      pattern,
-      count,
-    }));
-  }, [analysis]);
-
-  const performanceItems = useMemo(() => {
-    if (!analysis) {
-      return [];
-    }
-
-    return analysis.measures.map((measure, index) => ({
-      ...measure,
-      index,
-    }));
-  }, [analysis]);
-
-  const summaryText = useMemo(() => {
-    if (!analysis) {
-      return "手入力からすぐにコード進行を作成できます";
-    }
-
-    return `${analysis.measures.length}小節 / ${chordSummary.length}コード / ${analysis.engine}`;
-  }, [analysis, chordSummary.length]);
 
   useEffect(() => {
-    if (!analysis) {
-      return;
+    const handlePopState = () => {
+      setRoute(getRoute());
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  useEffect(() => {
+    async function loadScores() {
+      try {
+        const response = await fetch(`${apiBaseUrl}/api/scores`);
+        if (!response.ok) {
+          throw new Error("公開譜面を取得できませんでした。");
+        }
+
+        const data = await response.json();
+        setPublicScores(Array.isArray(data.scores) ? data.scores : []);
+      } catch {
+        setPublicScores([]);
+      }
     }
 
-    window.localStorage.setItem(storageKey, JSON.stringify(analysis));
-  }, [analysis]);
+    loadScores();
+  }, []);
+
+  useEffect(() => {
+    async function loadScoreByRoute() {
+      if (!route.scoreId) {
+        setScoreId("");
+        if (route.mode === "edit") {
+          const nextDraft = createDefaultDraft();
+          setScoreTitle(nextDraft.title);
+          setManualChordText(nextDraft.chordText);
+          setAnalysis(nextDraft.analysis);
+          setErrorMessage("");
+        }
+        return;
+      }
+
+      setIsLoadingScore(true);
+      setErrorMessage("");
+      setAnalysis(null);
+
+      try {
+        const response = await fetch(`${apiBaseUrl}/api/scores/${route.scoreId}`);
+        if (!response.ok) {
+          throw new Error("譜面を読み込めませんでした。");
+        }
+
+        const data = await response.json();
+        setScoreId(data.id);
+        setScoreTitle(data.title ?? "新しい譜面");
+        setAnalysis(hydrateAnalysis(data));
+        setManualChordText(
+          (data.measures ?? [])
+            .map((measure) => measure.chord)
+            .filter(Boolean)
+            .join(" | "),
+        );
+      } catch (error) {
+        setErrorMessage(error instanceof Error ? error.message : "譜面の読み込みに失敗しました。");
+      } finally {
+        setIsLoadingScore(false);
+      }
+    }
+
+    loadScoreByRoute();
+  }, [route.scoreId]);
 
   useEffect(() => {
     if (!analysis || !isPlaying) {
       return undefined;
     }
 
+    const intervalMs = Math.max(500, (60 / tempoBpm) * 4000);
+
     if (playbackMeasure >= analysis.measures.length - 1) {
       const doneTimer = window.setTimeout(() => {
         setIsPlaying(false);
-      }, 1200);
+      }, intervalMs);
       return () => window.clearTimeout(doneTimer);
     }
 
     const timer = window.setTimeout(() => {
       setPlaybackMeasure((current) => Math.min(current + 1, analysis.measures.length - 1));
-    }, 2000);
+    }, intervalMs);
 
     return () => window.clearTimeout(timer);
-  }, [analysis, isPlaying, playbackMeasure]);
+  }, [analysis, isPlaying, playbackMeasure, tempoBpm]);
+
+  const summaryText = analysis
+    ? `${analysis.measures.length}小節 / ${chordSummary.length}コード / ${analysis.engine}`
+    : "まだ譜面がありません";
+
+  const performanceItems = analysis?.measures ?? [];
 
   const handleFileChange = (event) => {
     const file = event.target.files?.[0] ?? null;
     setAudioFile(file);
-    setAnalysis(null);
     setErrorMessage("");
+    setSaveMessage("");
   };
 
   const handleAnalyze = async () => {
@@ -525,15 +372,18 @@ function App() {
       });
 
       if (!response.ok) {
-        throw new Error("解析APIの呼び出しに失敗しました。");
+        throw new Error("音声解析に失敗しました。");
       }
 
       const data = await response.json();
-      setAnalysis(hydrateAnalysis(data));
+      const nextAnalysis = hydrateAnalysis(data);
+      setAnalysis(nextAnalysis);
+      setManualChordText(nextAnalysis.measures.map((measure) => measure.chord).join(" | "));
       setPlaybackMeasure(0);
       setIsPlaying(false);
+      setSaveMessage("解析結果を編集画面に反映しました。");
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "不明なエラーです。");
+      setErrorMessage(error instanceof Error ? error.message : "音声解析に失敗しました。");
     } finally {
       setIsAnalyzing(false);
     }
@@ -548,8 +398,7 @@ function App() {
       const chunks = [];
 
       processor.onaudioprocess = (event) => {
-        const input = event.inputBuffer.getChannelData(0);
-        chunks.push(new Float32Array(input));
+        chunks.push(new Float32Array(event.inputBuffer.getChannelData(0)));
       };
 
       source.connect(processor);
@@ -564,35 +413,81 @@ function App() {
             track.stop();
           }
 
-          await audioContext.close();
-
-          const merged = mergeChunks(chunks);
-          const wavBlob = encodeWav(merged, audioContext.sampleRate);
-          const file = new File([wavBlob], `recording-${Date.now()}.wav`, {
-            type: "audio/wav",
+          const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+          const samples = new Float32Array(totalLength);
+          let offset = 0;
+          chunks.forEach((chunk) => {
+            samples.set(chunk, offset);
+            offset += chunk.length;
           });
 
+          const buffer = new ArrayBuffer(44 + samples.length * 2);
+          const view = new DataView(buffer);
+          const writeString = (position, value) => {
+            for (let index = 0; index < value.length; index += 1) {
+              view.setUint8(position + index, value.charCodeAt(index));
+            }
+          };
+
+          writeString(0, "RIFF");
+          view.setUint32(4, 36 + samples.length * 2, true);
+          writeString(8, "WAVE");
+          writeString(12, "fmt ");
+          view.setUint32(16, 16, true);
+          view.setUint16(20, 1, true);
+          view.setUint16(22, 1, true);
+          view.setUint32(24, audioContext.sampleRate, true);
+          view.setUint32(28, audioContext.sampleRate * 2, true);
+          view.setUint16(32, 2, true);
+          view.setUint16(34, 16, true);
+          writeString(36, "data");
+          view.setUint32(40, samples.length * 2, true);
+
+          let sampleOffset = 44;
+          for (let index = 0; index < samples.length; index += 1) {
+            const sample = Math.max(-1, Math.min(1, samples[index]));
+            view.setInt16(sampleOffset, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
+            sampleOffset += 2;
+          }
+
+          await audioContext.close();
+
+          const wavBlob = new Blob([buffer], { type: "audio/wav" });
+          const file = new File([wavBlob], `recording-${Date.now()}.wav`, { type: "audio/wav" });
           setAudioFile(file);
-          setRecordingLabel("録音をWAVファイルとしてセットしました。必要ならそのまま解析できます。");
-          setRecorder(null);
+          setRecordingLabel("録音をWAVに変換してセットしました。");
           setIsRecording(false);
+          setRecorder(null);
         },
       });
 
       setIsRecording(true);
-      setRecordingLabel("録音中です。停止するとWAVファイルとして取り込みます。");
+      setRecordingLabel("録音中です。止めるとWAVとして解析できます。");
       setErrorMessage("");
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "マイクを開始できませんでした。");
+      setErrorMessage(error instanceof Error ? error.message : "マイクの利用に失敗しました。");
     }
   };
 
   const handleStopRecording = () => {
-    if (!recorder) {
+    if (recorder) {
+      recorder.stop();
+    }
+  };
+
+  const handleManualCreate = () => {
+    const nextAnalysis = hydrateAnalysis(createAnalysisFromChordText(manualChordText));
+
+    if (!nextAnalysis.measures.length) {
+      setErrorMessage("`C | G | Am | F` のようにコードを入力してください。");
       return;
     }
 
-    recorder.stop();
+    setAnalysis(nextAnalysis);
+    setPlaybackMeasure(0);
+    setIsPlaying(false);
+    setErrorMessage("");
+    setSaveMessage("入力したコード進行から譜面を作成しました。");
   };
 
   const handleChordChange = (index, nextChord) => {
@@ -602,37 +497,21 @@ function App() {
       }
 
       const nextCandidates = chordShapes[nextChord] ?? [];
+      const measures = current.measures.map((measure, measureIndex) =>
+        measureIndex === index
+          ? { ...measure, chord: nextChord, tabCandidates: nextCandidates, selectedTab: nextCandidates[0] ?? "" }
+          : measure,
+      );
 
       return {
         ...current,
-        chords: current.chords.map((item, chordIndex) =>
-          chordIndex === index
-            ? { ...item, chord: nextChord, tabCandidates: nextCandidates, selectedTab: nextCandidates[0] ?? "" }
-            : item,
-        ),
-        measures: current.measures.map((measure, measureIndex) =>
-          measureIndex === index
-            ? { ...measure, chord: nextChord, tabCandidates: nextCandidates, selectedTab: nextCandidates[0] ?? "" }
-            : measure,
-        ),
-      };
-    });
-  };
-
-  const handleTabSelect = (index, shape) => {
-    setAnalysis((current) => {
-      if (!current) {
-        return current;
-      }
-
-      return {
-        ...current,
-        chords: current.chords.map((item, chordIndex) =>
-          chordIndex === index ? { ...item, selectedTab: shape } : item,
-        ),
-        measures: current.measures.map((measure, measureIndex) =>
-          measureIndex === index ? { ...measure, selectedTab: shape } : measure,
-        ),
+        measures,
+        chords: measures.map((measure) => ({
+          time: measure.startTime,
+          chord: measure.chord,
+          tabCandidates: measure.tabCandidates,
+          selectedTab: measure.selectedTab,
+        })),
       };
     });
   };
@@ -643,99 +522,57 @@ function App() {
         return current;
       }
 
+      const measures = current.measures.map((measure, measureIndex) =>
+        measureIndex === index ? { ...measure, rhythmPattern: nextPattern } : measure,
+      );
+
       return {
         ...current,
-        measures: current.measures.map((measure, measureIndex) =>
-          measureIndex === index ? { ...measure, rhythmPattern: nextPattern } : measure,
-        ),
+        measures,
+        chords: measures.map((measure) => ({
+          time: measure.startTime,
+          chord: measure.chord,
+          tabCandidates: measure.tabCandidates,
+          selectedTab: measure.selectedTab,
+        })),
       };
     });
   };
 
-  const handleClearSaved = () => {
-    window.localStorage.removeItem(storageKey);
-    setAnalysis(null);
-    setAudioFile(null);
-    setErrorMessage("");
-    setRecordingLabel("");
-    setIsPlaying(false);
-    setPlaybackMeasure(0);
-  };
+  const handleTabSelect = (index, shape) => {
+    setAnalysis((current) => {
+      if (!current) {
+        return current;
+      }
 
-  const handleExportJson = () => {
-    if (!analysis) {
-      return;
-    }
+      const measures = current.measures.map((measure, measureIndex) =>
+        measureIndex === index ? { ...measure, selectedTab: shape } : measure,
+      );
 
-    downloadTextFile(
-      `analysis-${Date.now()}.json`,
-      JSON.stringify(buildExportPayload(analysis), null, 2),
-      "application/json",
-    );
-  };
-
-  const handleExportText = () => {
-    if (!analysis) {
-      return;
-    }
-
-    downloadTextFile(
-      `chord-chart-${Date.now()}.txt`,
-      buildChordChartText(analysis),
-      "text/plain;charset=utf-8",
-    );
-  };
-
-  const handleExportMidi = () => {
-    if (!analysis) {
-      return;
-    }
-
-    downloadBlob(`chord-chart-${Date.now()}.mid`, createMidiBlob(analysis));
-  };
-
-  const handleStartPlayback = () => {
-    if (!analysis?.measures.length) {
-      return;
-    }
-
-    setPlaybackMeasure(0);
-    setIsPlaying(true);
-  };
-
-  const handleStopPlayback = () => {
-    setIsPlaying(false);
-    setPlaybackMeasure(0);
-  };
-
-  const handleManualCreate = () => {
-    const nextAnalysis = createAnalysisFromChordText(manualChordText);
-
-    if (!nextAnalysis.measures.length) {
-      setErrorMessage("コード進行を `C | G | Am | F` のように入力してください。");
-      return;
-    }
-
-    setAnalysis(hydrateAnalysis(nextAnalysis));
-    setAudioFile(null);
-    setRecordingLabel("手入力のコード進行を作成しました。");
-    setErrorMessage("");
-    setPlaybackMeasure(0);
-    setIsPlaying(false);
+      return {
+        ...current,
+        measures,
+        chords: measures.map((measure) => ({
+          time: measure.startTime,
+          chord: measure.chord,
+          tabCandidates: measure.tabCandidates,
+          selectedTab: measure.selectedTab,
+        })),
+      };
+    });
   };
 
   const ensureAudioContext = async () => {
-    const existing = audioContextState;
-    if (existing) {
-      if (existing.state === "suspended") {
-        await existing.resume();
+    if (audioContextState) {
+      if (audioContextState.state === "suspended") {
+        await audioContextState.resume();
       }
-      return existing;
+      return audioContextState;
     }
 
-    const nextContext = new window.AudioContext();
-    setAudioContextState(nextContext);
-    return nextContext;
+    const context = new window.AudioContext();
+    setAudioContextState(context);
+    return context;
   };
 
   const handlePlayChord = async (shape) => {
@@ -753,239 +590,329 @@ function App() {
         return;
       }
 
-      const midi = stringOpenMidi[index] + fret;
-      const frequency = midiToFrequency(midi);
       const oscillator = context.createOscillator();
       const gainNode = context.createGain();
       const startAt = now + index * 0.045;
-
       oscillator.type = "triangle";
-      oscillator.frequency.setValueAtTime(frequency, startAt);
+      oscillator.frequency.setValueAtTime(midiToFrequency(stringOpenMidi[index] + fret), startAt);
       gainNode.gain.setValueAtTime(0.0001, startAt);
       gainNode.gain.exponentialRampToValueAtTime(0.18, startAt + 0.02);
-      gainNode.gain.exponentialRampToValueAtTime(0.0001, startAt + 1.8);
-
+      gainNode.gain.exponentialRampToValueAtTime(0.0001, startAt + 1.6);
       oscillator.connect(gainNode);
       gainNode.connect(context.destination);
       oscillator.start(startAt);
-      oscillator.stop(startAt + 1.85);
+      oscillator.stop(startAt + 1.7);
     });
   };
 
-  const handleAddChordToken = (token) => {
-    setManualChordText((current) => {
-      const trimmed = current.trim();
+  const refreshScores = async () => {
+    const response = await fetch(`${apiBaseUrl}/api/scores`);
+    if (!response.ok) {
+      return;
+    }
 
-      if (!trimmed) {
-        return token === "|" ? "" : token;
+    const data = await response.json();
+    setPublicScores(Array.isArray(data.scores) ? data.scores : []);
+  };
+
+  const handleSaveScore = async () => {
+    if (!analysis) {
+      setErrorMessage("保存する譜面がありません。");
+      return;
+    }
+
+    setIsSaving(true);
+    setErrorMessage("");
+    setSaveMessage("");
+
+    try {
+      const payload = {
+        id: scoreId || undefined,
+        title: scoreTitle,
+        authorName: defaultAuthorName,
+        ...analysis,
+      };
+
+      const response = await fetch(`${apiBaseUrl}/api/scores`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        throw new Error("譜面の保存に失敗しました。");
       }
 
-      if (token === "|") {
-        return trimmed.endsWith("|") ? trimmed : `${trimmed} |`;
+      const saved = await response.json();
+      setScoreId(saved.id);
+      setScoreTitle(saved.title);
+      setAnalysis(hydrateAnalysis(saved));
+      setSaveMessage("公開譜面として保存しました。iPadでは再生画面を開いて使えます。");
+      await refreshScores();
+
+      if (route.mode === "edit" && !route.scoreId) {
+        navigateTo(`/edit/${saved.id}`);
       }
-
-      const needsSpacer = trimmed.endsWith("|") ? " " : " | ";
-      return `${trimmed}${needsSpacer}${token}`;
-    });
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "譜面の保存に失敗しました。");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const handleBackspaceChordToken = () => {
-    setManualChordText((current) => {
-      const parts = current
-        .split("|")
-        .map((value) => value.trim())
-        .filter(Boolean);
+  const handleCopyShareUrl = async () => {
+    if (!shareUrl) {
+      return;
+    }
 
-      parts.pop();
-      return parts.join(" | ");
-    });
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setSaveMessage("再生URLをコピーしました。");
+    } catch {
+      setSaveMessage("再生URLを表示しました。手動でコピーしてください。");
+    }
   };
 
-  const handleClearChordText = () => {
-    setManualChordText("");
+  const handleStartPlayback = () => {
+    if (!analysis?.measures.length) {
+      return;
+    }
+
+    setPlaybackMeasure(0);
+    setIsPlaying(true);
   };
+
+  const handleStopPlayback = () => {
+    setIsPlaying(false);
+    setPlaybackMeasure(0);
+  };
+
+  if (route.mode === "play") {
+    return (
+      <div className="app-shell play-shell">
+        <header className="hero hero-play">
+          <div>
+            <p className="eyebrow">みんなのギター広場</p>
+            <h1>{scoreTitle}</h1>
+            <p className="hero-copy">
+              {defaultAuthorName} が公開した譜面です。iPadで開いて、再生しながら弾ける表示にしています。
+            </p>
+          </div>
+          <div className="play-hero-card">
+            <p>作者</p>
+            <strong>{defaultAuthorName}</strong>
+            <p>概要</p>
+            <strong>{summaryText}</strong>
+          </div>
+        </header>
+
+        {isLoadingScore && <section className="panel">譜面を読み込み中です。</section>}
+        {errorMessage && <section className="panel error-panel">{errorMessage}</section>}
+
+        {analysis && (
+          <main className="play-layout">
+            <section className="panel player-toolbar">
+              <div className="toolbar-block">
+                <span className="toolbar-label">再生</span>
+                <div className="performance-actions">
+                  <button type="button" className="secondary-button" disabled={isPlaying} onClick={handleStartPlayback}>
+                    スタート
+                  </button>
+                  <button type="button" className="secondary-button" onClick={handleStopPlayback}>
+                    停止
+                  </button>
+                </div>
+              </div>
+              <div className="toolbar-block">
+                <span className="toolbar-label">テンポ</span>
+                <label className="tempo-control">
+                  <input
+                    type="range"
+                    min="50"
+                    max="140"
+                    value={tempoBpm}
+                    onChange={(event) => setTempoBpm(Number(event.target.value))}
+                  />
+                  <strong>{tempoBpm} BPM</strong>
+                </label>
+              </div>
+              <div className="toolbar-block">
+                <span className="toolbar-label">移動</span>
+                <div className="performance-actions">
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    onClick={() => setPlaybackMeasure((current) => Math.max(0, current - 1))}
+                  >
+                    前の小節
+                  </button>
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    onClick={() =>
+                      setPlaybackMeasure((current) => Math.min(current + 1, Math.max(0, performanceItems.length - 1)))
+                    }
+                  >
+                    次の小節
+                  </button>
+                </div>
+              </div>
+            </section>
+
+            <section className="performance-canvas">
+              <div className="performance-target-band" aria-hidden="true" />
+              <div
+                className="performance-strip"
+                style={{ transform: `translateX(calc(50vw - ${playbackMeasure * 312 + 170}px))` }}
+              >
+                {performanceItems.map((measure, index) => (
+                  <article
+                    key={`play-${measure.number}`}
+                    className={`performance-screen-card ${index === playbackMeasure ? "performance-screen-card-active" : ""}`}
+                  >
+                    <p className="performance-number">#{measure.number}</p>
+                    <ChordDiagram
+                      chord={measure.chord}
+                      shape={measure.selectedTab}
+                      rhythmPattern={measure.rhythmPattern}
+                      onPlay={() => handlePlayChord(measure.selectedTab)}
+                    />
+                  </article>
+                ))}
+              </div>
+            </section>
+
+            <section className="panel cue-panel">
+              <div>
+                <p className="section-kicker">現在の小節</p>
+                <h2>
+                  {performanceItems[playbackMeasure]?.chord ?? "-"} / {performanceItems[playbackMeasure]?.rhythmPattern ?? "-"}
+                </h2>
+              </div>
+              <div>
+                <p className="section-kicker">次のコード</p>
+                <h2>{performanceItems[playbackMeasure + 1]?.chord ?? "END"}</h2>
+              </div>
+              <button type="button" className="ghost-button" onClick={() => navigateTo(`/edit/${scoreId}`)}>
+                編集画面へ
+              </button>
+            </section>
+          </main>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="app-shell">
       <header className="hero">
-        <p className="eyebrow">Manual Chord Sketch</p>
-        <h1>コード手入力を中心に、すぐ練習用の進行を作れるWebアプリ</h1>
+        <p className="eyebrow">みんなのギター広場</p>
+        <h1>PCで譜面を作って、iPadで見ながら弾ける共有型ギター譜サービス</h1>
         <p className="hero-copy">
-          まずコード進行を手で入れて形にし、必要ならあとから録音や音声ファイル解析を使える構成にしました。
+          入力者は {defaultAuthorName} として保存されます。コード進行を作って公開すると、再生専用URLをiPadで開いてそのまま演奏に使えます。
         </p>
       </header>
 
       <section className="workspace-bar">
         <div className="workspace-summary">
-          <strong>現在の状態</strong>
+          <strong>現在の譜面</strong>
           <span>{summaryText}</span>
         </div>
-        <nav className="workspace-tabs" aria-label="quick navigation">
-          <a className="workspace-tab" href="#manual-entry">
-            手入力
-          </a>
-          <a className="workspace-tab" href="#audio-tools">
-            音声取込
-          </a>
-          <a className="workspace-tab" href="#results">
-            結果
-          </a>
-          <a className="workspace-tab" href="#chord-sheet">
-            コード表
-          </a>
-          <a className="workspace-tab" href="#measure-editor">
-            小節編集
-          </a>
-          <a className="workspace-tab" href="#performance">
-            練習モード
-          </a>
-        </nav>
+        <div className="workspace-tabs">
+          <button type="button" className="workspace-tab" onClick={() => navigateTo("/")}>
+            新規作成
+          </button>
+          {scoreId && (
+            <button type="button" className="workspace-tab" onClick={() => navigateTo(`/play/${scoreId}`)}>
+              iPad再生画面
+            </button>
+          )}
+        </div>
       </section>
 
-      <main className="grid">
-        <section className="panel" id="manual-entry">
-          <h2>1. コードを手入力</h2>
-          <div className="manual-entry">
-            <p className="section-kicker">メイン入力</p>
-            <p className="helper-text">
-              コードボタンを押すか、テキスト欄に直接 `C | G | Am | F` のように入力すると、すぐ下の編集画面に反映できます。
-            </p>
-            <label className="manual-label" htmlFor="manual-chord-text">
-              `|` 区切りでコード進行を入力
-            </label>
-            <div className="chord-keypad">
-              {chordOptions.map((chord) => (
-                <button
-                  key={chord}
-                  type="button"
-                  className="chord-pad-button"
-                  onClick={() => handleAddChordToken(chord)}
-                >
-                  {chord}
-                </button>
-              ))}
+      <main className="editor-layout">
+        <section className="panel editor-main">
+          <div className="panel-head">
+            <div>
+              <p className="section-kicker">譜面編集</p>
+              <h2>{scoreId ? "保存済み譜面を編集" : "新しい譜面を作る"}</h2>
             </div>
-            <div className="manual-actions">
-              <button type="button" className="ghost-button" onClick={() => handleAddChordToken("|")}>
-                区切りを追加
-              </button>
-              <button type="button" className="ghost-button" onClick={handleBackspaceChordToken}>
-                ひとつ戻す
-              </button>
-              <button type="button" className="ghost-button" onClick={handleClearChordText}>
-                クリア
-              </button>
-            </div>
-            <textarea
-              id="manual-chord-text"
-              className="manual-textarea"
-              value={manualChordText}
-              onChange={(event) => setManualChordText(event.target.value)}
-            />
-            <button type="button" className="primary-button" onClick={handleManualCreate}>
-              この内容でコード進行を作成
-            </button>
+            <div className="author-badge">{defaultAuthorName}</div>
           </div>
-        </section>
 
-        <section className="panel" id="audio-tools">
-          <h2>2. 音声から取り込む</h2>
-          <p className="section-kicker">補助機能</p>
-          <p className="helper-text">
-            手入力が難しいときだけ、録音または音声ファイル解析でコード進行のたたき台を作れます。
-          </p>
-          <label className="upload-box">
-            <span>音声ファイルを選択</span>
-            <input type="file" accept="audio/*" onChange={handleFileChange} />
+          <label className="field-stack">
+            <span>譜面タイトル</span>
+            <input
+              className="text-input"
+              value={scoreTitle}
+              onChange={(event) => setScoreTitle(event.target.value)}
+              placeholder="例: 卒業式で弾く曲"
+            />
           </label>
 
-          <div className="recording-actions">
-            <button type="button" className="secondary-button" disabled={isRecording} onClick={handleStartRecording}>
-              録音を開始
-            </button>
-            <button type="button" className="secondary-button" disabled={!isRecording} onClick={handleStopRecording}>
-              録音を停止
-            </button>
-          </div>
+          <div className="editor-grid">
+            <section className="editor-card">
+              <p className="section-kicker">手入力</p>
+              <p className="helper-text">`C | G | Am | F` の形式で入力して、譜面の土台を作ります。</p>
+              <textarea
+                className="manual-textarea"
+                value={manualChordText}
+                onChange={(event) => setManualChordText(event.target.value)}
+              />
+              <div className="button-row">
+                <button type="button" className="primary-button" onClick={handleManualCreate}>
+                  コード進行から譜面作成
+                </button>
+              </div>
+            </section>
 
-          <div className="file-meta">
-            <p>状態: {statusText}</p>
-            <p>ファイル: {audioFile ? audioFile.name : "未選択"}</p>
-            <p>録音: {recordingLabel || "まだ使っていません"}</p>
+            <section className="editor-card">
+              <p className="section-kicker">音声入力</p>
+              <p className="helper-text">WAVを解析してコード候補を作れます。まずは手入力メイン、音声は補助として使えます。</p>
+              <label className="upload-box">
+                <span>音声ファイルを選ぶ</span>
+                <input type="file" accept="audio/*" onChange={handleFileChange} />
+              </label>
+              <div className="recording-actions">
+                <button type="button" className="secondary-button" disabled={isRecording} onClick={handleStartRecording}>
+                  録音開始
+                </button>
+                <button type="button" className="secondary-button" disabled={!isRecording} onClick={handleStopRecording}>
+                  録音停止
+                </button>
+              </div>
+              <p className="helper-text">{recordingLabel || "録音するとWAV化して解析できます。"}</p>
+              <button type="button" className="ghost-button" disabled={!audioFile || isAnalyzing} onClick={handleAnalyze}>
+                {isAnalyzing ? "解析中..." : "音声から譜面候補を作る"}
+              </button>
+            </section>
           </div>
 
           {errorMessage && <p className="error-text">{errorMessage}</p>}
-
-          <button type="button" className="primary-button" disabled={!audioFile || isAnalyzing} onClick={handleAnalyze}>
-            {isAnalyzing ? "解析中..." : "音声からコード進行を作成"}
-          </button>
-        </section>
-
-        <section className="panel" id="results">
-          <h2>3. コード進行の結果</h2>
-          {!analysis && (
-            <div className="empty-state">
-              <p>まだコード進行は作成されていません。</p>
-              <p>まずは手入力から始めると最短で確認できます。必要なら音声解析も使えます。</p>
-            </div>
-          )}
+          {saveMessage && <p className="success-text">{saveMessage}</p>}
 
           {analysis && (
-            <div className="results">
-              <div className="overview-grid">
-                <section className="overview-card">
-                  <h3>使用コード</h3>
-                  <div className="overview-list">
-                    {chordSummary.map((item) => (
-                      <article key={item.chord} className="overview-item">
-                        <strong>{item.chord}</strong>
-                        <code>{item.tab || "TAB未選択"}</code>
-                      </article>
-                    ))}
+            <>
+              <section className="editor-card">
+                <div className="panel-head">
+                  <div>
+                    <p className="section-kicker">小節編集</p>
+                    <h3>公開前にコードとTABを整える</h3>
                   </div>
-                </section>
-
-                <section className="overview-card">
-                  <h3>ストローク</h3>
-                  <div className="overview-list">
-                    {strokeSummary.map((item) => (
-                      <article key={item.pattern} className="overview-item">
-                        <strong>{item.pattern}</strong>
-                        <span>{item.count} 小節</span>
-                      </article>
-                    ))}
-                  </div>
-                </section>
-              </div>
-
-              <div className="summary-card">
-                <p>入力元: {analysis.fileName}</p>
-                <p>長さ: {analysis.duration}</p>
-                <p>生成方法: {analysis.engine}</p>
-                <div className="summary-actions">
-                  <button type="button" className="ghost-button" onClick={handleExportJson}>
-                    JSONを書き出す
-                  </button>
-                  <button type="button" className="ghost-button" onClick={handleExportText}>
-                    テキストを書き出す
-                  </button>
-                  <button type="button" className="ghost-button" onClick={handleExportMidi}>
-                    MIDIを書き出す
-                  </button>
-                  <button type="button" className="ghost-button" onClick={handleClearSaved}>
-                    結果をクリア
-                  </button>
+                  <div className="summary-pill">{summaryText}</div>
                 </div>
-              </div>
-
-              <div className="timeline">
-                {analysis.chords.map((item, index) => (
-                  <article key={`${item.time}-${item.chord}-${index}`} className="timeline-row">
-                    <div className="timeline-meta">
-                      <p className="time-label">{item.time}</p>
+                <div className="measure-grid">
+                  {analysis.measures.map((measure, index) => (
+                    <article key={`measure-${measure.number}`} className="measure-card">
+                      <div className="measure-head">
+                        <p className="measure-number">#{measure.number}</p>
+                        <p className="measure-time">{measure.startTime}</p>
+                      </div>
                       <select
                         className="chord-select"
-                        value={item.chord}
+                        value={measure.chord}
                         onChange={(event) => handleChordChange(index, event.target.value)}
                       >
                         {chordOptions.map((option) => (
@@ -994,178 +921,98 @@ function App() {
                           </option>
                         ))}
                       </select>
-                    </div>
-                    <div className="shape-list">
-                      {(item.tabCandidates?.length ? item.tabCandidates : ["TAB候補なし"]).map((shape) => (
-                        <button
-                          key={shape}
-                          type="button"
-                          className={`shape-chip ${item.selectedTab === shape ? "shape-chip-active" : ""}`}
-                          onClick={() => handleTabSelect(index, shape)}
-                        >
-                          {shape}
-                        </button>
-                      ))}
-                    </div>
-                    <p className="selected-tab">
-                      選択中TAB: <code>{item.selectedTab || "TAB未選択"}</code>
-                    </p>
-                  </article>
-                ))}
-              </div>
-
-              <p className="note-text">{analysis.notes}</p>
-            </div>
-          )}
-        </section>
-
-        <section className="panel full-width" id="chord-sheet">
-          <h2>4. コード表</h2>
-          {!analysis && (
-            <div className="empty-state">
-              <p>コードダイアグラムはまだ表示されていません。</p>
-              <p>手入力または音声解析で進行を作ると、すぐに確認できます。</p>
-            </div>
-          )}
-
-          {analysis && (
-            <div className="chord-chart-strip">
-              {chordSummary.map((item) => (
-                <ChordDiagram
-                  key={`chart-${item.chord}`}
-                  chord={item.chord}
-                  shape={item.tab}
-                  rhythmPattern={item.rhythmPattern}
-                  onPlay={() => handlePlayChord(item.tab)}
-                />
-              ))}
-            </div>
-          )}
-        </section>
-
-        <section className="panel full-width" id="measure-editor">
-          <h2>5. 小節ごとの編集</h2>
-          {!analysis && (
-            <div className="empty-state">
-              <p>小節カードはまだ表示されていません。</p>
-              <p>コード進行を作成すると、TABとリズムを小節単位で整えられます。</p>
-            </div>
-          )}
-
-          {analysis && (
-            <div className="measure-grid">
-              {analysis.measures.map((measure, index) => (
-                <article key={`measure-${measure.number}`} className="measure-card">
-                  <div className="measure-head">
-                    <p className="measure-number">Measure {measure.number}</p>
-                    <p className="measure-time">{measure.startTime}</p>
-                  </div>
-
-                  <select
-                    className="chord-select"
-                    value={measure.chord}
-                    onChange={(event) => handleChordChange(index, event.target.value)}
-                  >
-                    {chordOptions.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
-                      </option>
-                    ))}
-                  </select>
-
-                  <p className="measure-meta">
-                    {measure.subdivision} / {measure.beats} beats
-                  </p>
-
-                  <label className="rhythm-field">
-                    <span>リズムパターン</span>
-                    <input
-                      className="rhythm-input"
-                      value={measure.rhythmPattern}
-                      onChange={(event) => handleRhythmChange(index, event.target.value)}
-                    />
-                  </label>
-
-                  <div className="shape-list">
-                    {(measure.tabCandidates?.length ? measure.tabCandidates : ["TAB候補なし"]).map((shape) => (
-                      <button
-                        key={shape}
-                        type="button"
-                        className={`shape-chip ${measure.selectedTab === shape ? "shape-chip-active" : ""}`}
-                        onClick={() => handleTabSelect(index, shape)}
-                      >
-                        {shape}
-                      </button>
-                    ))}
-                  </div>
-
-                  <p className="selected-tab">
-                    TAB: <code>{measure.selectedTab || "TAB未選択"}</code>
-                  </p>
-                </article>
-              ))}
-            </div>
-          )}
-        </section>
-
-        <section className="panel full-width" id="performance">
-          <h2>6. 練習モード</h2>
-          {!analysis && (
-            <div className="empty-state">
-              <p>練習用のスクロール表示はまだありません。</p>
-              <p>コード進行を作成すると、次のコードを追いながら練習できます。</p>
-            </div>
-          )}
-
-          {analysis && (
-            <div className="performance-panel">
-              <div className="performance-actions">
-                <button
-                  type="button"
-                  className="secondary-button"
-                  disabled={isPlaying}
-                  onClick={handleStartPlayback}
-                >
-                  練習レーンを開始
-                </button>
-                <button
-                  type="button"
-                  className="secondary-button"
-                  disabled={!isPlaying && playbackMeasure === 0}
-                  onClick={handleStopPlayback}
-                >
-                  停止して先頭へ
-                </button>
-              </div>
-
-              <div className="performance-stage">
-                <div className="performance-target" aria-hidden="true" />
-                <div
-                  className="performance-track"
-                  style={{
-                    transform: `translateX(calc(42% - ${playbackMeasure * 232}px))`,
-                  }}
-                >
-                  {performanceItems.map((item) => (
-                    <div
-                      key={`performance-${item.number}`}
-                      className={`performance-card ${item.index === playbackMeasure ? "performance-card-active" : ""}`}
-                    >
-                      <p className="performance-number">#{item.number}</p>
-                      <ChordDiagram
-                        chord={item.chord}
-                        shape={item.selectedTab}
-                        rhythmPattern={item.rhythmPattern}
-                        compact
-                        onPlay={() => handlePlayChord(item.selectedTab)}
-                      />
-                    </div>
+                      <label className="field-stack">
+                        <span>リズム</span>
+                        <input
+                          className="rhythm-input"
+                          value={measure.rhythmPattern}
+                          onChange={(event) => handleRhythmChange(index, event.target.value)}
+                        />
+                      </label>
+                      <div className="shape-list">
+                        {(measure.tabCandidates?.length ? measure.tabCandidates : ["TABなし"]).map((shape) => (
+                          <button
+                            key={`${measure.number}-${shape}`}
+                            type="button"
+                            className={`shape-chip ${measure.selectedTab === shape ? "shape-chip-active" : ""}`}
+                            onClick={() => handleTabSelect(index, shape)}
+                          >
+                            {shape}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="selected-tab">選択中TAB: <code>{measure.selectedTab || "TABなし"}</code></p>
+                    </article>
                   ))}
                 </div>
-              </div>
-            </div>
+              </section>
+
+              <section className="editor-card">
+                <div className="panel-head">
+                  <div>
+                    <p className="section-kicker">公開プレビュー</p>
+                    <h3>iPad再生画面に近い見え方</h3>
+                  </div>
+                </div>
+                <div className="preview-strip">
+                  {chordSummary.map((measure) => (
+                    <ChordDiagram
+                      key={`preview-${measure.number}`}
+                      chord={measure.chord}
+                      shape={measure.selectedTab}
+                      rhythmPattern={measure.rhythmPattern}
+                      onPlay={() => handlePlayChord(measure.selectedTab)}
+                    />
+                  ))}
+                </div>
+              </section>
+            </>
           )}
+
+          <section className="panel-footer">
+            <button type="button" className="primary-button save-button" disabled={isSaving} onClick={handleSaveScore}>
+              {isSaving ? "保存中..." : "公開譜面として保存"}
+            </button>
+            {shareUrl && (
+              <div className="share-box">
+                <p className="section-kicker">iPad再生URL</p>
+                <code>{shareUrl}</code>
+                <div className="button-row">
+                  <button type="button" className="ghost-button" onClick={handleCopyShareUrl}>
+                    URLをコピー
+                  </button>
+                  <button type="button" className="ghost-button" onClick={() => navigateTo(`/play/${scoreId}`)}>
+                    再生画面を開く
+                  </button>
+                </div>
+              </div>
+            )}
+          </section>
         </section>
+
+        <aside className="panel public-sidebar">
+          <p className="section-kicker">公開譜面</p>
+          <h2>みんなのギター広場に保存された譜面</h2>
+          <p className="helper-text">公開済みの譜面は、編集画面でも再生画面でもすぐ開けます。</p>
+          <div className="public-score-list">
+            {publicScores.map((score) => (
+              <article key={score.id} className="public-score-card">
+                <p className="public-score-meta">{score.authorName}</p>
+                <h3>{score.title}</h3>
+                <p>{score.measureCount}小節 / {score.duration}</p>
+                <div className="button-row">
+                  <button type="button" className="ghost-button" onClick={() => navigateTo(`/edit/${score.id}`)}>
+                    編集で開く
+                  </button>
+                  <button type="button" className="ghost-button" onClick={() => navigateTo(`/play/${score.id}`)}>
+                    iPad再生
+                  </button>
+                </div>
+              </article>
+            ))}
+            {!publicScores.length && <p className="helper-text">まだ公開譜面はありません。</p>}
+          </div>
+        </aside>
       </main>
     </div>
   );
