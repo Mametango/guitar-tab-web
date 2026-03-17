@@ -327,63 +327,103 @@ button {
 
 .diagram-shell {
   position: relative;
-  width: min(100%, 220px);
+  width: min(100%, 320px);
   margin: 0 auto;
+}
+
+.chord-board-shell {
+  display: grid;
+  gap: 14px;
+}
+
+.chord-board {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) 54px;
+  align-items: stretch;
+  gap: 10px;
 }
 
 .base-fret {
   position: absolute;
-  right: -6px;
-  top: 36px;
+  right: 52px;
+  top: -10px;
   color: #17120f;
   font-size: 0.82rem;
-}
-
-.string-status-row {
-  display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  margin-bottom: 8px;
-}
-
-.string-status {
-  text-align: center;
-  font-size: 1.4rem;
   font-weight: 700;
+}
+
+.status-rail,
+.string-label-rail {
+  display: grid;
+  grid-template-rows: repeat(6, 1fr);
+  align-items: center;
+}
+
+.status-mark {
+  text-align: center;
+  font-size: 2rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.string-label-mark {
+  color: #2846b0;
+  font-weight: 800;
+  font-size: 1.05rem;
 }
 
 .diagram-grid {
   position: relative;
-  aspect-ratio: 6 / 5;
-  border-top: 4px solid rgba(23, 18, 15, 0.94);
+}
+
+.horizontal-diagram {
+  aspect-ratio: 4 / 5;
+  border-left: 6px solid rgba(23, 18, 15, 0.98);
 }
 
 .diagram-string-line,
 .diagram-fret-line {
   position: absolute;
-  background: rgba(23, 18, 15, 0.7);
+  background: rgba(23, 18, 15, 0.9);
 }
 
-.diagram-string-line {
+.horizontal-string-line {
+  left: 0;
+  right: 0;
+  height: 2px;
+  transform: translateY(-50%);
+}
+
+.vertical-fret-line {
   top: 0;
   bottom: 0;
   width: 2px;
   transform: translateX(-50%);
 }
 
-.diagram-fret-line {
-  left: 0;
-  right: 0;
-  height: 2px;
-}
-
 .diagram-dot {
   position: absolute;
-  width: 18px;
-  height: 18px;
+  transform: translate(-50%, -50%);
+}
+
+.board-dot {
+  width: 28px;
+  height: 28px;
   border-radius: 999px;
   background: #17120f;
-  box-shadow: 0 0 0 4px rgba(255, 251, 247, 0.96);
-  transform: translate(-50%, -50%);
+  box-shadow: 0 0 0 5px rgba(255, 251, 247, 0.96);
+}
+
+.fret-label-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0;
+  width: calc(100% - 106px);
+  margin-left: 52px;
+  color: #17120f;
+  font-size: 1.6rem;
+  font-weight: 800;
+  text-align: center;
 }
 
 .diagram-tab,
@@ -424,6 +464,22 @@ button {
   overflow: hidden;
   min-height: 580px;
   padding: 20px 0 28px;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.gesture-hint {
+  position: absolute;
+  top: 8px;
+  left: 20px;
+  z-index: 3;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(17, 13, 10, 0.6);
+  color: #f4dfc0;
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
 }
 
 .performance-target-band {
@@ -523,6 +579,13 @@ code {
     min-height: 520px;
   }
 
+  .gesture-hint {
+    left: 14px;
+    right: 14px;
+    width: fit-content;
+    max-width: calc(100% - 28px);
+  }
+
   .performance-target-band {
     left: 38%;
   }
@@ -533,5 +596,24 @@ code {
 
   .performance-screen-card {
     width: 248px;
+  }
+
+  .chord-board {
+    grid-template-columns: 34px minmax(0, 1fr) 46px;
+    gap: 8px;
+  }
+
+  .status-mark {
+    font-size: 1.65rem;
+  }
+
+  .string-label-mark {
+    font-size: 0.92rem;
+  }
+
+  .fret-label-row {
+    width: calc(100% - 88px);
+    margin-left: 42px;
+    font-size: 1.35rem;
   }
 }

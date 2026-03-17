@@ -20,6 +20,12 @@ const chordShapes = {
   Bm: ["x24432", "799777"],
 };
 const stringOpenMidi = [40, 45, 50, 55, 59, 64];
+const swipeThreshold = 48;
+const tapThreshold = 10;
+
+function getStringPosition(index) {
+  return `${10 + index * 16}%`;
+}
 
 function normalizeTabShape(shape) {
   if (!shape) {
@@ -154,48 +160,66 @@ function ChordDiagram({ chord, shape, rhythmPattern, onPlay }) {
         音を鳴らす
       </button>
       <h3>{chord}</h3>
-      <div className="diagram-shell">
+      <div className="diagram-shell chord-board-shell">
         {baseFret > 1 && <span className="base-fret">{baseFret}fr</span>}
-        <div className="string-status-row">
-          {frets.map((value, index) => (
-            <span key={`${chord}-${index}`} className="string-status">
-              {value === "x" ? "X" : value === "0" ? "O" : ""}
-            </span>
-          ))}
-        </div>
-        <div className="diagram-grid" aria-label={`${chord} chord diagram`}>
-          {Array.from({ length: 4 }).map((_, fretIndex) => (
-            <div key={`fret-${fretIndex}`} className="diagram-fret-line" style={{ top: `${fretIndex * 25}%` }} />
-          ))}
-          {Array.from({ length: 6 }).map((_, stringIndex) => (
-            <div
-              key={`string-${stringIndex}`}
-              className="diagram-string-line"
-              style={{ left: `${stringIndex * 20}%` }}
-            />
-          ))}
-          {frets.map((value, stringIndex) => {
-            if (value === "x" || value === "0") {
-              return null;
-            }
-
-            const numeric = Number(value);
-            if (!Number.isFinite(numeric)) {
-              return null;
-            }
-
-            const row = baseFret > 1 ? numeric - baseFret : numeric - 1;
-            return (
-              <span
-                key={`dot-${chord}-${stringIndex}`}
-                className="diagram-dot"
-                style={{
-                  left: `${stringIndex * 20}%`,
-                  top: `${12.5 + Math.max(0, row) * 25}%`,
-                }}
+        <div className="chord-board">
+          <div className="status-rail" aria-hidden="true">
+            {[...frets].reverse().map((value, index) => (
+              <span key={`status-${chord}-${index}`} className="status-mark">
+                {value === "x" ? "X" : value === "0" ? "O" : ""}
+              </span>
+            ))}
+          </div>
+          <div className="diagram-grid horizontal-diagram" aria-label={`${chord} chord diagram`}>
+            {Array.from({ length: 6 }).map((_, stringIndex) => (
+              <div
+                key={`string-row-${stringIndex}`}
+                className="diagram-string-line horizontal-string-line"
+                style={{ top: `${stringIndex * 20}%` }}
               />
-            );
-          })}
+            ))}
+            {Array.from({ length: 5 }).map((_, fretIndex) => (
+              <div
+                key={`fret-column-${fretIndex}`}
+                className="diagram-fret-line vertical-fret-line"
+                style={{ left: `${fretIndex * 25}%` }}
+              />
+            ))}
+            {[...frets].reverse().map((value, rowIndex) => {
+              if (value === "x" || value === "0") {
+                return null;
+              }
+
+              const numeric = Number(value);
+              if (!Number.isFinite(numeric)) {
+                return null;
+              }
+
+              const column = baseFret > 1 ? numeric - baseFret : numeric - 1;
+              return (
+                <span
+                  key={`dot-${chord}-${rowIndex}`}
+                  className="diagram-dot board-dot"
+                  style={{
+                    left: `${12.5 + Math.max(0, column) * 25}%`,
+                    top: `${rowIndex * 20}%`,
+                  }}
+                />
+              );
+            })}
+          </div>
+          <div className="string-label-rail" aria-hidden="true">
+            {[1, 2, 3, 4, 5, 6].map((stringNumber) => (
+              <span key={`label-${chord}-${stringNumber}`} className="string-label-mark">
+                {stringNumber}弦
+              </span>
+            ))}
+          </div>
+        </div>
+        <div className="fret-label-row" aria-hidden="true">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <span key={`fret-label-${index}`}>{baseFret + index}</span>
+          ))}
         </div>
       </div>
       <p className="diagram-tab">{shape || "TABなし"}</p>
@@ -225,6 +249,7 @@ function App() {
   const [audioContextState, setAudioContextState] = useState(null);
   const [recorder, setRecorder] = useState(null);
   const [isRecording, setIsRecording] = useState(false);
+  const [touchSession, setTouchSession] = useState(null);
 
   const shareUrl = useMemo(() => {
     if (!scoreId) {
@@ -690,6 +715,61 @@ function App() {
     setPlaybackMeasure(0);
   };
 
+  const handleJumpToPreviousMeasure = () => {
+    setPlaybackMeasure((current) => Math.max(0, current - 1));
+    setIsPlaying(false);
+  };
+
+  const handleJumpToNextMeasure = () => {
+    setPlaybackMeasure((current) => Math.min(current + 1, Math.max(0, performanceItems.length - 1)));
+    setIsPlaying(false);
+  };
+
+  const handlePerformanceTouchStart = (event) => {
+    const touch = event.touches?.[0];
+    if (!touch) {
+      return;
+    }
+
+    setTouchSession({
+      x: touch.clientX,
+      y: touch.clientY,
+    });
+  };
+
+  const handlePerformanceTouchEnd = (event) => {
+    if (!touchSession) {
+      return;
+    }
+
+    const touch = event.changedTouches?.[0];
+    if (!touch) {
+      setTouchSession(null);
+      return;
+    }
+
+    const deltaX = touch.clientX - touchSession.x;
+    const deltaY = touch.clientY - touchSession.y;
+    const absX = Math.abs(deltaX);
+    const absY = Math.abs(deltaY);
+
+    if (absX >= swipeThreshold && absX > absY) {
+      if (deltaX > 0) {
+        handleJumpToPreviousMeasure();
+      } else {
+        handleJumpToNextMeasure();
+      }
+      setTouchSession(null);
+      return;
+    }
+
+    if (absX <= tapThreshold && absY <= tapThreshold && isPlaying) {
+      setIsPlaying(false);
+    }
+
+    setTouchSession(null);
+  };
+
   if (route.mode === "play") {
     return (
       <div className="app-shell play-shell">
@@ -745,16 +825,14 @@ function App() {
                   <button
                     type="button"
                     className="ghost-button"
-                    onClick={() => setPlaybackMeasure((current) => Math.max(0, current - 1))}
+                    onClick={handleJumpToPreviousMeasure}
                   >
                     前の小節
                   </button>
                   <button
                     type="button"
                     className="ghost-button"
-                    onClick={() =>
-                      setPlaybackMeasure((current) => Math.min(current + 1, Math.max(0, performanceItems.length - 1)))
-                    }
+                    onClick={handleJumpToNextMeasure}
                   >
                     次の小節
                   </button>
@@ -762,7 +840,12 @@ function App() {
               </div>
             </section>
 
-            <section className="performance-canvas">
+            <section
+              className="performance-canvas"
+              onTouchStart={handlePerformanceTouchStart}
+              onTouchEnd={handlePerformanceTouchEnd}
+            >
+              <div className="gesture-hint">タップで停止、左右スワイプで小節移動</div>
               <div className="performance-target-band" aria-hidden="true" />
               <div
                 className="performance-strip"
