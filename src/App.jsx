@@ -128,15 +128,16 @@ function hydrateAnalysis(data) {
 }
 
 function getRoute() {
-  const parts = window.location.pathname.split("/").filter(Boolean);
+  const raw = window.location.hash.replace(/^#\/?/, "");
+  const parts = raw.split("/").filter(Boolean);
   const mode = parts[0] === "play" ? "play" : "edit";
   const scoreId = parts.length > 1 ? parts[1] : "";
   return { mode, scoreId };
 }
 
 function navigateTo(pathname) {
-  window.history.pushState({}, "", pathname);
-  window.dispatchEvent(new PopStateEvent("popstate"));
+  const normalized = pathname.replace(/^\//, "");
+  window.location.hash = normalized ? `#/${normalized}` : "#/";
 }
 
 function ChordDiagram({ chord, shape, rhythmPattern, onPlay }) {
@@ -230,7 +231,7 @@ function App() {
       return "";
     }
 
-    return `${window.location.origin}/play/${scoreId}`;
+    return `${window.location.origin}${window.location.pathname}#/play/${scoreId}`;
   }, [scoreId]);
 
   const chordSummary = useMemo(() => {
@@ -254,8 +255,8 @@ function App() {
       setRoute(getRoute());
     };
 
-    window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
+    window.addEventListener("hashchange", handlePopState);
+    return () => window.removeEventListener("hashchange", handlePopState);
   }, []);
 
   useEffect(() => {
