@@ -2,6 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim() || "";
 const defaultAuthorName = "名無しの弾き語りさん";
+const defaultSectionName = "Aメロ";
+const defaultManualText = `[イントロ] C | G | Am | F
+[Aメロ] C | G | Am | F
+[サビ] F | G | C | C`;
 const chordOptions = ["C", "Cm", "D", "Dm", "E", "Em", "F", "Fm", "G", "Gm", "A", "Am", "B", "Bm"];
 const chordShapes = {
   C: ["x32010", "x35553"],
@@ -23,8 +27,8 @@ const stringOpenMidi = [40, 45, 50, 55, 59, 64];
 const swipeThreshold = 48;
 const tapThreshold = 10;
 
-function getStringPosition(index) {
-  return `${10 + index * 16}%`;
+function createId(prefix = "section") {
+  return `${prefix}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 function normalizeTabShape(shape) {
@@ -51,9 +55,10 @@ function midiToFrequency(midi) {
   return 440 * 2 ** ((midi - 69) / 12);
 }
 
-function createMeasure(chord, index) {
+function makeMeasure(chord, index, sectionName, sectionId) {
   const tabCandidates = chordShapes[chord] ?? [];
   return {
+    id: `${sectionId}-measure-${index + 1}`,
     number: index + 1,
     startTime: `0:${String(index * 4).padStart(2, "0")}`,
     chord,
@@ -62,74 +67,159 @@ function createMeasure(chord, index) {
     rhythmPattern: "Down-Up x4",
     tabCandidates,
     selectedTab: tabCandidates[0] ?? "",
+    sectionName,
+    sectionId,
   };
 }
 
-function createAnalysisFromChordText(input) {
-  const measures = input
-    .split("|")
-    .map((value) => value.trim())
-    .filter(Boolean)
-    .map((chord, index) => createMeasure(chord, index));
-
-  return {
-    fileName: "manual-input",
-    duration: `00:${String(measures.length * 4).padStart(2, "0")}`,
-    engine: "manual-chord-entry",
-    notes: "PCで入力したコード進行です。必要に応じてTABとリズムを調整して公開できます。",
-    chords: measures.map((measure) => ({
-      time: measure.startTime,
-      chord: measure.chord,
-      tabCandidates: measure.tabCandidates,
-      selectedTab: measure.selectedTab,
-    })),
-    measures,
-  };
-}
-
-function createDefaultDraft() {
-  const chordText = "C | G | Am | F";
-  return {
-    title: "新しい譜面",
-    chordText,
-    analysis: hydrateAnalysis(createAnalysisFromChordText(chordText)),
-  };
-}
-
-function hydrateAnalysis(data) {
-  if (!data) {
-    return null;
-  }
-
-  const measures = (data.measures ?? []).map((measure, index) => {
-    const tabCandidates = measure.tabCandidates?.length ? measure.tabCandidates : (chordShapes[measure.chord] ?? []);
+function normalizeSection(section, index) {
+  const sectionId = section.id || createId("section");
+  const sectionName = section.name?.trim() || `${defaultSectionName}${index + 1}`;
+  const measures = (section.measures ?? []).map((measure, measureIndex) => {
+    const chord = measure.chord || "C";
+    const tabCandidates = measure.tabCandidates?.length ? measure.tabCandidates : (chordShapes[chord] ?? []);
     return {
-      number: measure.number ?? index + 1,
-      startTime: measure.startTime ?? `0:${String(index * 4).padStart(2, "0")}`,
-      chord: measure.chord ?? "C",
+      id: measure.id || `${sectionId}-measure-${measureIndex + 1}`,
+      number: measure.number ?? measureIndex + 1,
+      startTime: measure.startTime ?? `0:${String(measureIndex * 4).padStart(2, "0")}`,
+      chord,
       beats: measure.beats ?? 4,
       subdivision: measure.subdivision ?? "4/4",
       rhythmPattern: measure.rhythmPattern ?? "Down-Up x4",
       tabCandidates,
       selectedTab: measure.selectedTab ?? tabCandidates[0] ?? "",
+      sectionName,
+      sectionId,
     };
   });
 
-  const chords = measures.map((measure) => ({
+  return {
+    id: sectionId,
+    name: sectionName,
+    measures,
+  };
+}
+
+function createSectionsFromText(input) {
+  const lines = input
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const parsedSections = lines.map((line, index) => {
+    const match = line.match(/^\[(.+?)\]\s*(.+)$/);
+    const name = match?.[1]?.trim() || (index === 0 ? defaultSectionName : `セクション${index + 1}`);
+    const progressionText = match?.[2] ?? line;
+    const sectionId = createId("section");
+    const measures = progressionText
+      .split("|")
+      .map((value) => value.trim())
+      .filter(Boolean)
+      .map((chord, measureIndex) => makeMeasure(chord, measureIndex, name, sectionId));
+
+    return {
+      id: sectionId,
+      name,
+      measures,
+    };
+  });
+
+  if (!parsedSections.length) {
+    return [{
+      id: createId("section"),
+      name: defaultSectionName,
+      measures: [],
+    }];
+  }
+
+  return parsedSections;
+}
+
+function flattenMeasures(sections) {
+  return sections.flatMap((section) =>
+    section.measures.map((measure, index) => ({
+      ...measure,
+      number: index + 1,
+      sectionName: section.name,
+      sectionId: section.id,
+    })),
+  );
+}
+
+function toChordTimeline(sections) {
+  return flattenMeasures(sections).map((measure) => ({
     time: measure.startTime,
     chord: measure.chord,
     tabCandidates: measure.tabCandidates,
     selectedTab: measure.selectedTab,
+    sectionName: measure.sectionName,
+    sectionId: measure.sectionId,
   }));
+}
+
+function buildScoreFromSections({ title, sections, fileName = "manual-input", engine = "manual-chord-entry", notes = "" }) {
+  const normalizedSections = sections.map(normalizeSection);
+  const measureCount = normalizedSections.reduce((sum, section) => sum + section.measures.length, 0);
 
   return {
-    ...data,
-    fileName: data.fileName ?? "manual-input",
-    duration: data.duration ?? `00:${String(measures.length * 4).padStart(2, "0")}`,
-    engine: data.engine ?? "manual-chord-entry",
-    notes: data.notes ?? "",
-    chords,
-    measures,
+    title: title?.trim() || "新しい譜面",
+    fileName,
+    duration: `00:${String(measureCount * 4).padStart(2, "0")}`,
+    engine,
+    notes,
+    sections: normalizedSections,
+    measures: flattenMeasures(normalizedSections),
+    chords: toChordTimeline(normalizedSections),
+  };
+}
+
+function hydrateScore(data) {
+  if (!data) {
+    return null;
+  }
+
+  if (Array.isArray(data.sections) && data.sections.length) {
+    return buildScoreFromSections({
+      title: data.title,
+      sections: data.sections,
+      fileName: data.fileName,
+      engine: data.engine,
+      notes: data.notes,
+    });
+  }
+
+  const fallbackName = data.measures?.[0]?.sectionName || defaultSectionName;
+  const fallbackId = createId("section");
+  const fallbackMeasures = (data.measures ?? []).map((measure, index) => ({
+    ...makeMeasure(measure.chord || "C", index, fallbackName, fallbackId),
+    ...measure,
+    sectionName: measure.sectionName || fallbackName,
+    sectionId: measure.sectionId || fallbackId,
+  }));
+
+  return buildScoreFromSections({
+    title: data.title,
+    sections: [{
+      id: fallbackId,
+      name: fallbackName,
+      measures: fallbackMeasures,
+    }],
+    fileName: data.fileName,
+    engine: data.engine,
+    notes: data.notes,
+  });
+}
+
+function createDefaultDraft() {
+  const sections = createSectionsFromText(defaultManualText);
+  return {
+    title: "新しい譜面",
+    manualText: defaultManualText,
+    score: buildScoreFromSections({
+      title: "新しい譜面",
+      sections,
+      notes: "セクション単位で整理した譜面です。",
+    }),
   };
 }
 
@@ -146,6 +236,29 @@ function navigateTo(pathname) {
   window.location.hash = normalized ? `#/${normalized}` : "#/";
 }
 
+function buildSavePayload(score, scoreId, title) {
+  const hydrated = buildScoreFromSections({
+    title,
+    sections: score.sections,
+    fileName: score.fileName,
+    engine: score.engine,
+    notes: score.notes,
+  });
+
+  return {
+    id: scoreId || undefined,
+    title: title.trim() || hydrated.title,
+    authorName: defaultAuthorName,
+    fileName: hydrated.fileName,
+    duration: hydrated.duration,
+    engine: hydrated.engine,
+    notes: hydrated.notes,
+    sections: hydrated.sections,
+    measures: hydrated.measures,
+    chords: hydrated.chords,
+  };
+}
+
 function ChordDiagram({ chord, shape, rhythmPattern, onPlay }) {
   const frets = normalizeTabShape(shape);
   const numericFrets = frets
@@ -153,6 +266,12 @@ function ChordDiagram({ chord, shape, rhythmPattern, onPlay }) {
     .filter((value) => Number.isFinite(value));
   const minFret = numericFrets.length > 0 ? Math.min(...numericFrets) : 1;
   const baseFret = minFret > 1 ? minFret : 1;
+  const displayStrings = frets
+    .map((value, index) => ({
+      value,
+      stringNumber: 6 - index,
+    }))
+    .reverse();
 
   return (
     <article className="chord-card">
@@ -164,9 +283,9 @@ function ChordDiagram({ chord, shape, rhythmPattern, onPlay }) {
         {baseFret > 1 && <span className="base-fret">{baseFret}fr</span>}
         <div className="chord-board">
           <div className="status-rail" aria-hidden="true">
-            {[...frets].reverse().map((value, index) => (
-              <span key={`status-${chord}-${index}`} className="status-mark">
-                {value === "x" ? "X" : value === "0" ? "O" : ""}
+            {displayStrings.map((item) => (
+              <span key={`status-${chord}-${item.stringNumber}`} className="status-mark">
+                {item.value === "x" ? "X" : item.value === "0" ? "O" : ""}
               </span>
             ))}
           </div>
@@ -185,12 +304,12 @@ function ChordDiagram({ chord, shape, rhythmPattern, onPlay }) {
                 style={{ left: `${fretIndex * 25}%` }}
               />
             ))}
-            {[...frets].reverse().map((value, rowIndex) => {
-              if (value === "x" || value === "0") {
+            {displayStrings.map((item, rowIndex) => {
+              if (item.value === "x" || item.value === "0") {
                 return null;
               }
 
-              const numeric = Number(value);
+              const numeric = Number(item.value);
               if (!Number.isFinite(numeric)) {
                 return null;
               }
@@ -198,7 +317,7 @@ function ChordDiagram({ chord, shape, rhythmPattern, onPlay }) {
               const column = baseFret > 1 ? numeric - baseFret : numeric - 1;
               return (
                 <span
-                  key={`dot-${chord}-${rowIndex}`}
+                  key={`dot-${chord}-${item.stringNumber}`}
                   className="diagram-dot board-dot"
                   style={{
                     left: `${12.5 + Math.max(0, column) * 25}%`,
@@ -209,9 +328,9 @@ function ChordDiagram({ chord, shape, rhythmPattern, onPlay }) {
             })}
           </div>
           <div className="string-label-rail" aria-hidden="true">
-            {[1, 2, 3, 4, 5, 6].map((stringNumber) => (
-              <span key={`label-${chord}-${stringNumber}`} className="string-label-mark">
-                {stringNumber}弦
+            {displayStrings.map((item) => (
+              <span key={`label-${chord}-${item.stringNumber}`} className="string-label-mark">
+                {item.stringNumber}弦
               </span>
             ))}
           </div>
@@ -228,13 +347,15 @@ function ChordDiagram({ chord, shape, rhythmPattern, onPlay }) {
   );
 }
 
-function App() {
+export default function App() {
   const defaultDraft = createDefaultDraft();
   const [route, setRoute] = useState(() => getRoute());
   const [scoreTitle, setScoreTitle] = useState(defaultDraft.title);
-  const [manualChordText, setManualChordText] = useState(defaultDraft.chordText);
-  const [analysis, setAnalysis] = useState(defaultDraft.analysis);
+  const [manualSectionText, setManualSectionText] = useState(defaultDraft.manualText);
+  const [score, setScore] = useState(defaultDraft.score);
   const [scoreId, setScoreId] = useState(() => getRoute().scoreId);
+  const [selectedSectionId, setSelectedSectionId] = useState(defaultDraft.score.sections[0]?.id || "");
+  const [playSectionId, setPlaySectionId] = useState(defaultDraft.score.sections[0]?.id || "");
   const [publicScores, setPublicScores] = useState([]);
   const [audioFile, setAudioFile] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -251,37 +372,29 @@ function App() {
   const [isRecording, setIsRecording] = useState(false);
   const [touchSession, setTouchSession] = useState(null);
 
+  const selectedSection = useMemo(
+    () => score?.sections.find((section) => section.id === selectedSectionId) ?? score?.sections[0] ?? null,
+    [score, selectedSectionId],
+  );
+  const activePlaySection = useMemo(
+    () => score?.sections.find((section) => section.id === playSectionId) ?? score?.sections[0] ?? null,
+    [score, playSectionId],
+  );
   const shareUrl = useMemo(() => {
     if (!scoreId) {
       return "";
     }
-
     return `${window.location.origin}${window.location.pathname}#/play/${scoreId}`;
   }, [scoreId]);
 
-  const chordSummary = useMemo(() => {
-    if (!analysis) {
-      return [];
-    }
-
-    const seen = new Set();
-    return analysis.measures.filter((measure) => {
-      if (seen.has(measure.chord)) {
-        return false;
-      }
-
-      seen.add(measure.chord);
-      return true;
-    });
-  }, [analysis]);
+  const summaryText = score
+    ? `${score.sections.length}セクション / ${score.measures.length}小節 / ${score.engine}`
+    : "まだ譜面がありません";
 
   useEffect(() => {
-    const handlePopState = () => {
-      setRoute(getRoute());
-    };
-
-    window.addEventListener("hashchange", handlePopState);
-    return () => window.removeEventListener("hashchange", handlePopState);
+    const handleHashChange = () => setRoute(getRoute());
+    window.addEventListener("hashchange", handleHashChange);
+    return () => window.removeEventListener("hashchange", handleHashChange);
   }, []);
 
   useEffect(() => {
@@ -291,7 +404,6 @@ function App() {
         if (!response.ok) {
           throw new Error("公開譜面を取得できませんでした。");
         }
-
         const data = await response.json();
         setPublicScores(Array.isArray(data.scores) ? data.scores : []);
       } catch {
@@ -305,12 +417,14 @@ function App() {
   useEffect(() => {
     async function loadScoreByRoute() {
       if (!route.scoreId) {
-        setScoreId("");
         if (route.mode === "edit") {
-          const nextDraft = createDefaultDraft();
-          setScoreTitle(nextDraft.title);
-          setManualChordText(nextDraft.chordText);
-          setAnalysis(nextDraft.analysis);
+          const draft = createDefaultDraft();
+          setScoreTitle(draft.title);
+          setManualSectionText(draft.manualText);
+          setScore(draft.score);
+          setSelectedSectionId(draft.score.sections[0]?.id || "");
+          setPlaySectionId(draft.score.sections[0]?.id || "");
+          setScoreId("");
           setErrorMessage("");
         }
         return;
@@ -318,7 +432,6 @@ function App() {
 
       setIsLoadingScore(true);
       setErrorMessage("");
-      setAnalysis(null);
 
       try {
         const response = await fetch(`${apiBaseUrl}/api/scores/${route.scoreId}`);
@@ -327,14 +440,15 @@ function App() {
         }
 
         const data = await response.json();
+        const hydrated = hydrateScore(data);
+        const nextSectionId = hydrated.sections[0]?.id || "";
         setScoreId(data.id);
         setScoreTitle(data.title ?? "新しい譜面");
-        setAnalysis(hydrateAnalysis(data));
-        setManualChordText(
-          (data.measures ?? [])
-            .map((measure) => measure.chord)
-            .filter(Boolean)
-            .join(" | "),
+        setScore(hydrated);
+        setSelectedSectionId(nextSectionId);
+        setPlaySectionId(nextSectionId);
+        setManualSectionText(
+          hydrated.sections.map((section) => `[${section.name}] ${section.measures.map((measure) => measure.chord).join(" | ")}`).join("\n"),
         );
       } catch (error) {
         setErrorMessage(error instanceof Error ? error.message : "譜面の読み込みに失敗しました。");
@@ -344,34 +458,227 @@ function App() {
     }
 
     loadScoreByRoute();
-  }, [route.scoreId]);
+  }, [route.scoreId, route.mode]);
 
   useEffect(() => {
-    if (!analysis || !isPlaying) {
+    if (!activePlaySection?.measures.length || !isPlaying) {
       return undefined;
     }
 
     const intervalMs = Math.max(500, (60 / tempoBpm) * 4000);
-
-    if (playbackMeasure >= analysis.measures.length - 1) {
-      const doneTimer = window.setTimeout(() => {
-        setIsPlaying(false);
-      }, intervalMs);
-      return () => window.clearTimeout(doneTimer);
+    if (playbackMeasure >= activePlaySection.measures.length - 1) {
+      const timer = window.setTimeout(() => setIsPlaying(false), intervalMs);
+      return () => window.clearTimeout(timer);
     }
 
     const timer = window.setTimeout(() => {
-      setPlaybackMeasure((current) => Math.min(current + 1, analysis.measures.length - 1));
+      setPlaybackMeasure((current) => Math.min(current + 1, activePlaySection.measures.length - 1));
     }, intervalMs);
 
     return () => window.clearTimeout(timer);
-  }, [analysis, isPlaying, playbackMeasure, tempoBpm]);
+  }, [activePlaySection, isPlaying, playbackMeasure, tempoBpm]);
 
-  const summaryText = analysis
-    ? `${analysis.measures.length}小節 / ${chordSummary.length}コード / ${analysis.engine}`
-    : "まだ譜面がありません";
+  const updateSection = (sectionId, updater) => {
+    setScore((current) => {
+      if (!current) {
+        return current;
+      }
 
-  const performanceItems = analysis?.measures ?? [];
+      const nextSections = current.sections.map((section, index) =>
+        section.id === sectionId ? normalizeSection(updater(section), index) : section,
+      );
+
+      return buildScoreFromSections({
+        title: scoreTitle,
+        sections: nextSections,
+        fileName: current.fileName,
+        engine: current.engine,
+        notes: current.notes,
+      });
+    });
+  };
+
+  const refreshScores = async () => {
+    const response = await fetch(`${apiBaseUrl}/api/scores`);
+    if (!response.ok) {
+      return;
+    }
+    const data = await response.json();
+    setPublicScores(Array.isArray(data.scores) ? data.scores : []);
+  };
+
+  const handleCreateFromText = () => {
+    const sections = createSectionsFromText(manualSectionText);
+    const nextScore = buildScoreFromSections({
+      title: scoreTitle,
+      sections,
+      notes: "セクション単位で整理した譜面です。",
+    });
+
+    if (!nextScore.measures.length) {
+      setErrorMessage("`[Aメロ] C | G | Am | F` のように入力してください。");
+      return;
+    }
+
+    setScore(nextScore);
+    setSelectedSectionId(nextScore.sections[0]?.id || "");
+    setPlaySectionId(nextScore.sections[0]?.id || "");
+    setPlaybackMeasure(0);
+    setIsPlaying(false);
+    setSaveMessage("セクションごとに譜面を作成しました。");
+    setErrorMessage("");
+  };
+
+  const handleAddSection = () => {
+    const sectionId = createId("section");
+    const newSection = normalizeSection({
+      id: sectionId,
+      name: `セクション${score.sections.length + 1}`,
+      measures: [makeMeasure("C", 0, `セクション${score.sections.length + 1}`, sectionId)],
+    }, score.sections.length);
+
+    const nextScore = buildScoreFromSections({
+      title: scoreTitle,
+      sections: [...score.sections, newSection],
+      fileName: score.fileName,
+      engine: score.engine,
+      notes: score.notes,
+    });
+
+    setScore(nextScore);
+    setSelectedSectionId(newSection.id);
+    setPlaySectionId(newSection.id);
+    setManualSectionText(
+      nextScore.sections.map((section) => `[${section.name}] ${section.measures.map((measure) => measure.chord).join(" | ")}`).join("\n"),
+    );
+  };
+
+  const handleRemoveSection = (sectionId) => {
+    if (score.sections.length <= 1) {
+      return;
+    }
+
+    const remaining = score.sections.filter((section) => section.id !== sectionId);
+    const nextScore = buildScoreFromSections({
+      title: scoreTitle,
+      sections: remaining,
+      fileName: score.fileName,
+      engine: score.engine,
+      notes: score.notes,
+    });
+
+    setScore(nextScore);
+    setSelectedSectionId(remaining[0]?.id || "");
+    setPlaySectionId(remaining[0]?.id || "");
+    setManualSectionText(
+      nextScore.sections.map((section) => `[${section.name}] ${section.measures.map((measure) => measure.chord).join(" | ")}`).join("\n"),
+    );
+  };
+
+  const handleRenameSection = (sectionId, nextName) => {
+    updateSection(sectionId, (section) => ({
+      ...section,
+      name: nextName,
+      measures: section.measures.map((measure) => ({
+        ...measure,
+        sectionName: nextName,
+      })),
+    }));
+  };
+
+  const handleChordChange = (sectionId, measureIndex, nextChord) => {
+    updateSection(sectionId, (section) => {
+      const tabCandidates = chordShapes[nextChord] ?? [];
+      return {
+        ...section,
+        measures: section.measures.map((measure, index) =>
+          index === measureIndex
+            ? {
+                ...measure,
+                chord: nextChord,
+                tabCandidates,
+                selectedTab: tabCandidates[0] ?? "",
+              }
+            : measure,
+        ),
+      };
+    });
+  };
+
+  const handleRhythmChange = (sectionId, measureIndex, nextPattern) => {
+    updateSection(sectionId, (section) => ({
+      ...section,
+      measures: section.measures.map((measure, index) =>
+        index === measureIndex ? { ...measure, rhythmPattern: nextPattern } : measure,
+      ),
+    }));
+  };
+
+  const handleTabSelect = (sectionId, measureIndex, shape) => {
+    updateSection(sectionId, (section) => ({
+      ...section,
+      measures: section.measures.map((measure, index) =>
+        index === measureIndex ? { ...measure, selectedTab: shape } : measure,
+      ),
+    }));
+  };
+
+  const handleAddMeasure = (sectionId) => {
+    updateSection(sectionId, (section) => ({
+      ...section,
+      measures: [...section.measures, makeMeasure("C", section.measures.length, section.name, section.id)],
+    }));
+  };
+
+  const handleRemoveMeasure = (sectionId, measureIndex) => {
+    updateSection(sectionId, (section) => ({
+      ...section,
+      measures: section.measures.filter((_, index) => index !== measureIndex),
+    }));
+  };
+
+  const ensureAudioContext = async () => {
+    if (audioContextState) {
+      if (audioContextState.state === "suspended") {
+        await audioContextState.resume();
+      }
+      return audioContextState;
+    }
+
+    const context = new window.AudioContext();
+    setAudioContextState(context);
+    return context;
+  };
+
+  const handlePlayChord = async (shape) => {
+    const context = await ensureAudioContext();
+    const frets = normalizeTabShape(shape);
+    const now = context.currentTime;
+
+    frets.forEach((value, index) => {
+      if (value === "x") {
+        return;
+      }
+
+      const fret = value === "0" ? 0 : Number(value);
+      if (!Number.isFinite(fret)) {
+        return;
+      }
+
+      const oscillator = context.createOscillator();
+      const gainNode = context.createGain();
+      const startAt = now + index * 0.045;
+      oscillator.type = "triangle";
+      oscillator.frequency.setValueAtTime(midiToFrequency(stringOpenMidi[index] + fret), startAt);
+      gainNode.gain.setValueAtTime(0.0001, startAt);
+      gainNode.gain.exponentialRampToValueAtTime(0.18, startAt + 0.02);
+      gainNode.gain.exponentialRampToValueAtTime(0.0001, startAt + 1.6);
+      oscillator.connect(gainNode);
+      gainNode.connect(context.destination);
+      oscillator.start(startAt);
+      oscillator.stop(startAt + 1.7);
+    });
+  };
 
   const handleFileChange = (event) => {
     const file = event.target.files?.[0] ?? null;
@@ -391,7 +698,6 @@ function App() {
     try {
       const formData = new FormData();
       formData.append("audio", audioFile);
-
       const response = await fetch(`${apiBaseUrl}/api/analyze`, {
         method: "POST",
         body: formData,
@@ -402,12 +708,24 @@ function App() {
       }
 
       const data = await response.json();
-      const nextAnalysis = hydrateAnalysis(data);
-      setAnalysis(nextAnalysis);
-      setManualChordText(nextAnalysis.measures.map((measure) => measure.chord).join(" | "));
+      const hydrated = hydrateScore({
+        ...data,
+        sections: [{
+          id: createId("section"),
+          name: "解析結果",
+          measures: data.measures ?? [],
+        }],
+      });
+
+      setScore(hydrated);
+      setSelectedSectionId(hydrated.sections[0]?.id || "");
+      setPlaySectionId(hydrated.sections[0]?.id || "");
+      setManualSectionText(
+        hydrated.sections.map((section) => `[${section.name}] ${section.measures.map((measure) => measure.chord).join(" | ")}`).join("\n"),
+      );
       setPlaybackMeasure(0);
       setIsPlaying(false);
-      setSaveMessage("解析結果を編集画面に反映しました。");
+      setSaveMessage("解析結果をセクション化して反映しました。");
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "音声解析に失敗しました。");
     } finally {
@@ -501,148 +819,8 @@ function App() {
     }
   };
 
-  const handleManualCreate = () => {
-    const nextAnalysis = hydrateAnalysis(createAnalysisFromChordText(manualChordText));
-
-    if (!nextAnalysis.measures.length) {
-      setErrorMessage("`C | G | Am | F` のようにコードを入力してください。");
-      return;
-    }
-
-    setAnalysis(nextAnalysis);
-    setPlaybackMeasure(0);
-    setIsPlaying(false);
-    setErrorMessage("");
-    setSaveMessage("入力したコード進行から譜面を作成しました。");
-  };
-
-  const handleChordChange = (index, nextChord) => {
-    setAnalysis((current) => {
-      if (!current) {
-        return current;
-      }
-
-      const nextCandidates = chordShapes[nextChord] ?? [];
-      const measures = current.measures.map((measure, measureIndex) =>
-        measureIndex === index
-          ? { ...measure, chord: nextChord, tabCandidates: nextCandidates, selectedTab: nextCandidates[0] ?? "" }
-          : measure,
-      );
-
-      return {
-        ...current,
-        measures,
-        chords: measures.map((measure) => ({
-          time: measure.startTime,
-          chord: measure.chord,
-          tabCandidates: measure.tabCandidates,
-          selectedTab: measure.selectedTab,
-        })),
-      };
-    });
-  };
-
-  const handleRhythmChange = (index, nextPattern) => {
-    setAnalysis((current) => {
-      if (!current) {
-        return current;
-      }
-
-      const measures = current.measures.map((measure, measureIndex) =>
-        measureIndex === index ? { ...measure, rhythmPattern: nextPattern } : measure,
-      );
-
-      return {
-        ...current,
-        measures,
-        chords: measures.map((measure) => ({
-          time: measure.startTime,
-          chord: measure.chord,
-          tabCandidates: measure.tabCandidates,
-          selectedTab: measure.selectedTab,
-        })),
-      };
-    });
-  };
-
-  const handleTabSelect = (index, shape) => {
-    setAnalysis((current) => {
-      if (!current) {
-        return current;
-      }
-
-      const measures = current.measures.map((measure, measureIndex) =>
-        measureIndex === index ? { ...measure, selectedTab: shape } : measure,
-      );
-
-      return {
-        ...current,
-        measures,
-        chords: measures.map((measure) => ({
-          time: measure.startTime,
-          chord: measure.chord,
-          tabCandidates: measure.tabCandidates,
-          selectedTab: measure.selectedTab,
-        })),
-      };
-    });
-  };
-
-  const ensureAudioContext = async () => {
-    if (audioContextState) {
-      if (audioContextState.state === "suspended") {
-        await audioContextState.resume();
-      }
-      return audioContextState;
-    }
-
-    const context = new window.AudioContext();
-    setAudioContextState(context);
-    return context;
-  };
-
-  const handlePlayChord = async (shape) => {
-    const context = await ensureAudioContext();
-    const frets = normalizeTabShape(shape);
-    const now = context.currentTime;
-
-    frets.forEach((value, index) => {
-      if (value === "x") {
-        return;
-      }
-
-      const fret = value === "0" ? 0 : Number(value);
-      if (!Number.isFinite(fret)) {
-        return;
-      }
-
-      const oscillator = context.createOscillator();
-      const gainNode = context.createGain();
-      const startAt = now + index * 0.045;
-      oscillator.type = "triangle";
-      oscillator.frequency.setValueAtTime(midiToFrequency(stringOpenMidi[index] + fret), startAt);
-      gainNode.gain.setValueAtTime(0.0001, startAt);
-      gainNode.gain.exponentialRampToValueAtTime(0.18, startAt + 0.02);
-      gainNode.gain.exponentialRampToValueAtTime(0.0001, startAt + 1.6);
-      oscillator.connect(gainNode);
-      gainNode.connect(context.destination);
-      oscillator.start(startAt);
-      oscillator.stop(startAt + 1.7);
-    });
-  };
-
-  const refreshScores = async () => {
-    const response = await fetch(`${apiBaseUrl}/api/scores`);
-    if (!response.ok) {
-      return;
-    }
-
-    const data = await response.json();
-    setPublicScores(Array.isArray(data.scores) ? data.scores : []);
-  };
-
   const handleSaveScore = async () => {
-    if (!analysis) {
+    if (!score) {
       setErrorMessage("保存する譜面がありません。");
       return;
     }
@@ -652,13 +830,7 @@ function App() {
     setSaveMessage("");
 
     try {
-      const payload = {
-        id: scoreId || undefined,
-        title: scoreTitle,
-        authorName: defaultAuthorName,
-        ...analysis,
-      };
-
+      const payload = buildSavePayload(score, scoreId, scoreTitle);
       const response = await fetch(`${apiBaseUrl}/api/scores`, {
         method: "POST",
         headers: {
@@ -672,10 +844,13 @@ function App() {
       }
 
       const saved = await response.json();
+      const hydrated = hydrateScore(saved);
       setScoreId(saved.id);
       setScoreTitle(saved.title);
-      setAnalysis(hydrateAnalysis(saved));
-      setSaveMessage("公開譜面として保存しました。iPadでは再生画面を開いて使えます。");
+      setScore(hydrated);
+      setSelectedSectionId(hydrated.sections[0]?.id || "");
+      setPlaySectionId(hydrated.sections[0]?.id || "");
+      setSaveMessage("公開譜面として保存しました。iPadではセクションごとに再生できます。");
       await refreshScores();
 
       if (route.mode === "edit" && !route.scoreId) {
@@ -702,10 +877,9 @@ function App() {
   };
 
   const handleStartPlayback = () => {
-    if (!analysis?.measures.length) {
+    if (!activePlaySection?.measures.length) {
       return;
     }
-
     setPlaybackMeasure(0);
     setIsPlaying(true);
   };
@@ -721,7 +895,16 @@ function App() {
   };
 
   const handleJumpToNextMeasure = () => {
-    setPlaybackMeasure((current) => Math.min(current + 1, Math.max(0, performanceItems.length - 1)));
+    if (!activePlaySection) {
+      return;
+    }
+    setPlaybackMeasure((current) => Math.min(current + 1, activePlaySection.measures.length - 1));
+    setIsPlaying(false);
+  };
+
+  const handleSelectPlaySection = (sectionId) => {
+    setPlaySectionId(sectionId);
+    setPlaybackMeasure(0);
     setIsPlaying(false);
   };
 
@@ -730,7 +913,6 @@ function App() {
     if (!touch) {
       return;
     }
-
     setTouchSession({
       x: touch.clientX,
       y: touch.clientY,
@@ -759,11 +941,7 @@ function App() {
       } else {
         handleJumpToNextMeasure();
       }
-      setTouchSession(null);
-      return;
-    }
-
-    if (absX <= tapThreshold && absY <= tapThreshold && isPlaying) {
+    } else if (absX <= tapThreshold && absY <= tapThreshold && isPlaying) {
       setIsPlaying(false);
     }
 
@@ -771,15 +949,15 @@ function App() {
   };
 
   if (route.mode === "play") {
+    const currentMeasure = activePlaySection?.measures[playbackMeasure] ?? null;
+    const nextMeasure = activePlaySection?.measures[playbackMeasure + 1] ?? null;
+
     return (
       <div className="app-shell play-shell">
         <header className="hero hero-play">
           <div>
             <p className="eyebrow">みんなのギター広場</p>
             <h1>{scoreTitle}</h1>
-            <p className="hero-copy">
-              {defaultAuthorName} が公開した譜面です。iPadで開いて、再生しながら弾ける表示にしています。
-            </p>
           </div>
           <div className="play-hero-card">
             <p>作者</p>
@@ -792,8 +970,24 @@ function App() {
         {isLoadingScore && <section className="panel">譜面を読み込み中です。</section>}
         {errorMessage && <section className="panel error-panel">{errorMessage}</section>}
 
-        {analysis && (
+        {score && activePlaySection && (
           <main className="play-layout">
+            <section className="panel section-jump-panel">
+              <p className="section-kicker">セクション移動</p>
+              <div className="section-chip-row">
+                {score.sections.map((section) => (
+                  <button
+                    key={section.id}
+                    type="button"
+                    className={`section-chip ${section.id === activePlaySection.id ? "section-chip-active" : ""}`}
+                    onClick={() => handleSelectPlaySection(section.id)}
+                  >
+                    {section.name}
+                  </button>
+                ))}
+              </div>
+            </section>
+
             <section className="panel player-toolbar">
               <div className="toolbar-block">
                 <span className="toolbar-label">再生</span>
@@ -820,20 +1014,12 @@ function App() {
                 </label>
               </div>
               <div className="toolbar-block">
-                <span className="toolbar-label">移動</span>
+                <span className="toolbar-label">小節移動</span>
                 <div className="performance-actions">
-                  <button
-                    type="button"
-                    className="ghost-button"
-                    onClick={handleJumpToPreviousMeasure}
-                  >
+                  <button type="button" className="ghost-button" onClick={handleJumpToPreviousMeasure}>
                     前の小節
                   </button>
-                  <button
-                    type="button"
-                    className="ghost-button"
-                    onClick={handleJumpToNextMeasure}
-                  >
+                  <button type="button" className="ghost-button" onClick={handleJumpToNextMeasure}>
                     次の小節
                   </button>
                 </div>
@@ -849,14 +1035,14 @@ function App() {
               <div className="performance-target-band" aria-hidden="true" />
               <div
                 className="performance-strip"
-                style={{ transform: `translateX(calc(50vw - ${playbackMeasure * 312 + 170}px))` }}
+                style={{ transform: `translateX(calc(50vw - ${playbackMeasure * 338 + 178}px))` }}
               >
-                {performanceItems.map((measure, index) => (
+                {activePlaySection.measures.map((measure, index) => (
                   <article
-                    key={`play-${measure.number}`}
+                    key={measure.id}
                     className={`performance-screen-card ${index === playbackMeasure ? "performance-screen-card-active" : ""}`}
                   >
-                    <p className="performance-number">#{measure.number}</p>
+                    <p className="performance-number">{activePlaySection.name} #{measure.number}</p>
                     <ChordDiagram
                       chord={measure.chord}
                       shape={measure.selectedTab}
@@ -870,14 +1056,14 @@ function App() {
 
             <section className="panel cue-panel">
               <div>
-                <p className="section-kicker">現在の小節</p>
-                <h2>
-                  {performanceItems[playbackMeasure]?.chord ?? "-"} / {performanceItems[playbackMeasure]?.rhythmPattern ?? "-"}
-                </h2>
+                <p className="section-kicker">現在の位置</p>
+                <h2>{activePlaySection.name}</h2>
+                <p>{currentMeasure ? `${currentMeasure.chord} / ${currentMeasure.rhythmPattern}` : "-"}</p>
               </div>
               <div>
-                <p className="section-kicker">次のコード</p>
-                <h2>{performanceItems[playbackMeasure + 1]?.chord ?? "END"}</h2>
+                <p className="section-kicker">次の小節</p>
+                <h2>{nextMeasure?.chord ?? "END"}</h2>
+                <p>{nextMeasure?.rhythmPattern ?? ""}</p>
               </div>
               <button type="button" className="ghost-button" onClick={() => navigateTo(`/edit/${scoreId}`)}>
                 編集画面へ
@@ -893,10 +1079,6 @@ function App() {
     <div className="app-shell">
       <header className="hero">
         <p className="eyebrow">みんなのギター広場</p>
-        <h1>PCで譜面を作って、iPadで見ながら弾ける共有型ギター譜サービス</h1>
-        <p className="hero-copy">
-          入力者は {defaultAuthorName} として保存されます。コード進行を作って公開すると、再生専用URLをiPadで開いてそのまま演奏に使えます。
-        </p>
       </header>
 
       <section className="workspace-bar">
@@ -932,29 +1114,29 @@ function App() {
               className="text-input"
               value={scoreTitle}
               onChange={(event) => setScoreTitle(event.target.value)}
-              placeholder="例: 卒業式で弾く曲"
+              placeholder="例: 文化祭で弾く曲"
             />
           </label>
 
           <div className="editor-grid">
             <section className="editor-card">
-              <p className="section-kicker">手入力</p>
-              <p className="helper-text">`C | G | Am | F` の形式で入力して、譜面の土台を作ります。</p>
+              <p className="section-kicker">セクション入力</p>
+              <p className="helper-text">`[Aメロ] C | G | Am | F` のように、セクションごとにまとめて入力できます。</p>
               <textarea
-                className="manual-textarea"
-                value={manualChordText}
-                onChange={(event) => setManualChordText(event.target.value)}
+                className="manual-textarea section-textarea"
+                value={manualSectionText}
+                onChange={(event) => setManualSectionText(event.target.value)}
               />
               <div className="button-row">
-                <button type="button" className="primary-button" onClick={handleManualCreate}>
-                  コード進行から譜面作成
+                <button type="button" className="primary-button" onClick={handleCreateFromText}>
+                  セクションから譜面作成
                 </button>
               </div>
             </section>
 
             <section className="editor-card">
               <p className="section-kicker">音声入力</p>
-              <p className="helper-text">WAVを解析してコード候補を作れます。まずは手入力メイン、音声は補助として使えます。</p>
+              <p className="helper-text">WAVを解析して、1つのセクションとして下書きを作れます。</p>
               <label className="upload-box">
                 <span>音声ファイルを選ぶ</span>
                 <input type="file" accept="audio/*" onChange={handleFileChange} />
@@ -969,7 +1151,7 @@ function App() {
               </div>
               <p className="helper-text">{recordingLabel || "録音するとWAV化して解析できます。"}</p>
               <button type="button" className="ghost-button" disabled={!audioFile || isAnalyzing} onClick={handleAnalyze}>
-                {isAnalyzing ? "解析中..." : "音声から譜面候補を作る"}
+                {isAnalyzing ? "解析中..." : "音声から下書きを作る"}
               </button>
             </section>
           </div>
@@ -977,80 +1159,138 @@ function App() {
           {errorMessage && <p className="error-text">{errorMessage}</p>}
           {saveMessage && <p className="success-text">{saveMessage}</p>}
 
-          {analysis && (
-            <>
-              <section className="editor-card">
+          {score && (
+            <section className="section-editor-layout">
+              <aside className="section-sidebar">
                 <div className="panel-head">
                   <div>
-                    <p className="section-kicker">小節編集</p>
-                    <h3>公開前にコードとTABを整える</h3>
+                    <p className="section-kicker">セクション一覧</p>
+                    <h3>曲を分けて編集する</h3>
                   </div>
-                  <div className="summary-pill">{summaryText}</div>
+                  <button type="button" className="ghost-button" onClick={handleAddSection}>
+                    セクション追加
+                  </button>
                 </div>
-                <div className="measure-grid">
-                  {analysis.measures.map((measure, index) => (
-                    <article key={`measure-${measure.number}`} className="measure-card">
-                      <div className="measure-head">
-                        <p className="measure-number">#{measure.number}</p>
-                        <p className="measure-time">{measure.startTime}</p>
-                      </div>
-                      <select
-                        className="chord-select"
-                        value={measure.chord}
-                        onChange={(event) => handleChordChange(index, event.target.value)}
-                      >
-                        {chordOptions.map((option) => (
-                          <option key={option} value={option}>
-                            {option}
-                          </option>
-                        ))}
-                      </select>
-                      <label className="field-stack">
-                        <span>リズム</span>
-                        <input
-                          className="rhythm-input"
-                          value={measure.rhythmPattern}
-                          onChange={(event) => handleRhythmChange(index, event.target.value)}
-                        />
-                      </label>
-                      <div className="shape-list">
-                        {(measure.tabCandidates?.length ? measure.tabCandidates : ["TABなし"]).map((shape) => (
-                          <button
-                            key={`${measure.number}-${shape}`}
-                            type="button"
-                            className={`shape-chip ${measure.selectedTab === shape ? "shape-chip-active" : ""}`}
-                            onClick={() => handleTabSelect(index, shape)}
-                          >
-                            {shape}
-                          </button>
-                        ))}
-                      </div>
-                      <p className="selected-tab">選択中TAB: <code>{measure.selectedTab || "TABなし"}</code></p>
-                    </article>
-                  ))}
-                </div>
-              </section>
 
-              <section className="editor-card">
-                <div className="panel-head">
-                  <div>
-                    <p className="section-kicker">公開プレビュー</p>
-                    <h3>iPad再生画面に近い見え方</h3>
-                  </div>
-                </div>
-                <div className="preview-strip">
-                  {chordSummary.map((measure) => (
-                    <ChordDiagram
-                      key={`preview-${measure.number}`}
-                      chord={measure.chord}
-                      shape={measure.selectedTab}
-                      rhythmPattern={measure.rhythmPattern}
-                      onPlay={() => handlePlayChord(measure.selectedTab)}
-                    />
+                <div className="section-list">
+                  {score.sections.map((section) => (
+                    <button
+                      key={section.id}
+                      type="button"
+                      className={`section-list-item ${section.id === selectedSection?.id ? "section-list-item-active" : ""}`}
+                      onClick={() => setSelectedSectionId(section.id)}
+                    >
+                      <strong>{section.name}</strong>
+                      <span>{section.measures.length}小節</span>
+                    </button>
                   ))}
                 </div>
-              </section>
-            </>
+              </aside>
+
+              {selectedSection && (
+                <div className="section-detail">
+                  <section className="editor-card">
+                    <div className="panel-head">
+                      <div>
+                        <p className="section-kicker">選択中のセクション</p>
+                        <h3>{selectedSection.name}</h3>
+                      </div>
+                      <div className="button-row">
+                        <button type="button" className="ghost-button" onClick={() => handleAddMeasure(selectedSection.id)}>
+                          小節追加
+                        </button>
+                        <button
+                          type="button"
+                          className="ghost-button"
+                          disabled={score.sections.length <= 1}
+                          onClick={() => handleRemoveSection(selectedSection.id)}
+                        >
+                          セクション削除
+                        </button>
+                      </div>
+                    </div>
+
+                    <label className="field-stack">
+                      <span>セクション名</span>
+                      <input
+                        className="text-input"
+                        value={selectedSection.name}
+                        onChange={(event) => handleRenameSection(selectedSection.id, event.target.value)}
+                      />
+                    </label>
+
+                    <div className="measure-grid">
+                      {selectedSection.measures.map((measure, index) => (
+                        <article key={measure.id} className="measure-card">
+                          <div className="measure-head">
+                            <p className="measure-number">#{measure.number}</p>
+                            <button
+                              type="button"
+                              className="measure-remove-button"
+                              disabled={selectedSection.measures.length <= 1}
+                              onClick={() => handleRemoveMeasure(selectedSection.id, index)}
+                            >
+                              削除
+                            </button>
+                          </div>
+                          <select
+                            className="chord-select"
+                            value={measure.chord}
+                            onChange={(event) => handleChordChange(selectedSection.id, index, event.target.value)}
+                          >
+                            {chordOptions.map((option) => (
+                              <option key={option} value={option}>
+                                {option}
+                              </option>
+                            ))}
+                          </select>
+                          <label className="field-stack">
+                            <span>リズム</span>
+                            <input
+                              className="rhythm-input"
+                              value={measure.rhythmPattern}
+                              onChange={(event) => handleRhythmChange(selectedSection.id, index, event.target.value)}
+                            />
+                          </label>
+                          <div className="shape-list">
+                            {(measure.tabCandidates?.length ? measure.tabCandidates : ["TABなし"]).map((shape) => (
+                              <button
+                                key={`${measure.id}-${shape}`}
+                                type="button"
+                                className={`shape-chip ${measure.selectedTab === shape ? "shape-chip-active" : ""}`}
+                                onClick={() => handleTabSelect(selectedSection.id, index, shape)}
+                              >
+                                {shape}
+                              </button>
+                            ))}
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  </section>
+
+                  <section className="editor-card">
+                    <div className="panel-head">
+                      <div>
+                        <p className="section-kicker">選択セクションのプレビュー</p>
+                        <h3>iPadで見える並び</h3>
+                      </div>
+                    </div>
+                    <div className="section-preview-strip">
+                      {selectedSection.measures.map((measure) => (
+                        <ChordDiagram
+                          key={`preview-${measure.id}`}
+                          chord={measure.chord}
+                          shape={measure.selectedTab}
+                          rhythmPattern={measure.rhythmPattern}
+                          onPlay={() => handlePlayChord(measure.selectedTab)}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                </div>
+              )}
+            </section>
           )}
 
           <section className="panel-footer">
@@ -1077,18 +1317,18 @@ function App() {
         <aside className="panel public-sidebar">
           <p className="section-kicker">公開譜面</p>
           <h2>みんなのギター広場に保存された譜面</h2>
-          <p className="helper-text">公開済みの譜面は、編集画面でも再生画面でもすぐ開けます。</p>
+          <p className="helper-text">セクション単位の譜面を、編集画面でも再生画面でもすぐ開けます。</p>
           <div className="public-score-list">
-            {publicScores.map((score) => (
-              <article key={score.id} className="public-score-card">
-                <p className="public-score-meta">{score.authorName}</p>
-                <h3>{score.title}</h3>
-                <p>{score.measureCount}小節 / {score.duration}</p>
+            {publicScores.map((item) => (
+              <article key={item.id} className="public-score-card">
+                <p className="public-score-meta">{item.authorName}</p>
+                <h3>{item.title}</h3>
+                <p>{item.measureCount}小節 / {item.duration}</p>
                 <div className="button-row">
-                  <button type="button" className="ghost-button" onClick={() => navigateTo(`/edit/${score.id}`)}>
+                  <button type="button" className="ghost-button" onClick={() => navigateTo(`/edit/${item.id}`)}>
                     編集で開く
                   </button>
-                  <button type="button" className="ghost-button" onClick={() => navigateTo(`/play/${score.id}`)}>
+                  <button type="button" className="ghost-button" onClick={() => navigateTo(`/play/${item.id}`)}>
                     iPad再生
                   </button>
                 </div>
@@ -1101,5 +1341,3 @@ function App() {
     </div>
   );
 }
-
-export default App;

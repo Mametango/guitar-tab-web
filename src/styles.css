@@ -189,6 +189,69 @@ button {
   gap: 18px;
 }
 
+.section-editor-layout {
+  display: grid;
+  grid-template-columns: minmax(240px, 280px) minmax(0, 1fr);
+  gap: 18px;
+}
+
+.section-sidebar,
+.section-detail {
+  display: grid;
+  gap: 16px;
+}
+
+.section-list,
+.section-chip-row {
+  display: grid;
+  gap: 10px;
+}
+
+.section-chip-row {
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+}
+
+.section-list-item,
+.section-chip {
+  min-height: 52px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 214, 163, 0.2);
+  background: rgba(255, 255, 255, 0.04);
+  color: #f8f1e7;
+  text-align: left;
+}
+
+.section-list-item {
+  display: grid;
+  gap: 4px;
+}
+
+.section-list-item-active,
+.section-chip-active {
+  background: linear-gradient(135deg, rgba(213, 138, 61, 0.25), rgba(240, 200, 134, 0.22));
+  border-color: rgba(240, 200, 134, 0.42);
+}
+
+.section-preview-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.section-textarea {
+  min-height: 180px;
+}
+
+.measure-remove-button {
+  min-height: 36px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 214, 163, 0.2);
+  background: rgba(255, 255, 255, 0.04);
+  color: #f8f1e7;
+}
+
 .editor-grid,
 .measure-grid {
   display: grid;
@@ -327,7 +390,7 @@ button {
 
 .diagram-shell {
   position: relative;
-  width: min(100%, 320px);
+  width: min(100%, 264px);
   margin: 0 auto;
 }
 
@@ -338,14 +401,14 @@ button {
 
 .chord-board {
   display: grid;
-  grid-template-columns: 42px minmax(0, 1fr) 54px;
+  grid-template-columns: 28px minmax(0, 1fr) 34px;
   align-items: stretch;
-  gap: 10px;
+  gap: 6px;
 }
 
 .base-fret {
   position: absolute;
-  right: 52px;
+  right: 30px;
   top: -10px;
   color: #17120f;
   font-size: 0.82rem;
@@ -361,7 +424,7 @@ button {
 
 .status-mark {
   text-align: center;
-  font-size: 2rem;
+  font-size: 1.7rem;
   font-weight: 800;
   line-height: 1;
 }
@@ -369,7 +432,9 @@ button {
 .string-label-mark {
   color: #2846b0;
   font-weight: 800;
-  font-size: 1.05rem;
+  font-size: 0.8rem;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .diagram-grid {
@@ -377,7 +442,7 @@ button {
 }
 
 .horizontal-diagram {
-  aspect-ratio: 4 / 5;
+  aspect-ratio: 1 / 1;
   border-left: 6px solid rgba(23, 18, 15, 0.98);
 }
 
@@ -407,21 +472,21 @@ button {
 }
 
 .board-dot {
-  width: 28px;
-  height: 28px;
+  width: 22px;
+  height: 22px;
   border-radius: 999px;
   background: #17120f;
-  box-shadow: 0 0 0 5px rgba(255, 251, 247, 0.96);
+  box-shadow: 0 0 0 4px rgba(255, 251, 247, 0.96);
 }
 
 .fret-label-row {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 0;
-  width: calc(100% - 106px);
-  margin-left: 52px;
+  width: calc(100% - 68px);
+  margin-left: 34px;
   color: #17120f;
-  font-size: 1.6rem;
+  font-size: 1.35rem;
   font-weight: 800;
   text-align: center;
 }
@@ -436,6 +501,11 @@ button {
 .play-layout {
   display: grid;
   gap: 18px;
+}
+
+.section-jump-panel {
+  display: grid;
+  gap: 12px;
 }
 
 .player-toolbar,
@@ -505,7 +575,7 @@ button {
 }
 
 .performance-screen-card {
-  width: 286px;
+  width: 318px;
   border-radius: 28px;
   background: rgba(33, 24, 19, 0.88);
   border: 1px solid rgba(255, 226, 194, 0.12);
@@ -551,6 +621,7 @@ code {
 
 @media (max-width: 1100px) {
   .editor-layout,
+  .section-editor-layout,
   .editor-grid,
   .measure-grid,
   .hero-play,
@@ -595,25 +666,25 @@ code {
   }
 
   .performance-screen-card {
-    width: 248px;
+    width: 286px;
   }
 
   .chord-board {
-    grid-template-columns: 34px minmax(0, 1fr) 46px;
-    gap: 8px;
+    grid-template-columns: 26px minmax(0, 1fr) 32px;
+    gap: 6px;
   }
 
   .status-mark {
-    font-size: 1.65rem;
+    font-size: 1.45rem;
   }
 
   .string-label-mark {
-    font-size: 0.92rem;
+    font-size: 0.74rem;
   }
 
   .fret-label-row {
-    width: calc(100% - 88px);
-    margin-left: 42px;
-    font-size: 1.35rem;
+    width: calc(100% - 64px);
+    margin-left: 32px;
+    font-size: 1.2rem;
   }
 }
