@@ -1,4 +1,5 @@
 import express from "express";
+import cors from "cors";
 import { importYoutubeUrl } from "./services/importYoutubeUrl.js";
 
 const app = express();
@@ -6,6 +7,7 @@ const port = Number(process.env.PORT || 8080);
 const backendToken = process.env.BACKEND_AUTH_TOKEN?.trim() || "";
 
 app.use(express.json());
+app.use(cors({ origin: true }));
 
 app.get("/health", async (_request, response) => {
   response.json({
