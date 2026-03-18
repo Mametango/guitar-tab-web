@@ -1,5 +1,345 @@
 [
   {
+    "id": "38334c99",
+    "title": "YouTube下書き ZQ54VQ3UvG0",
+    "authorName": "名無しの弾き語りさん",
+    "fileName": "youtube-draft",
+    "duration": "00:48",
+    "engine": "youtube-draft-import-v1",
+    "notes": "This is a section draft generated from the YouTube URL flow. Audio extraction is not enabled yet, so please review and adjust the chords manually. Falling back to a manual draft because yt-dlp, ffmpeg, and deno are not all available in the current runtime.",
+    "chords": [
+      {
+        "time": "0:00",
+        "chord": "Am",
+        "tabCandidates": [
+          "x02210",
+          "577555"
+        ],
+        "selectedTab": "x02210",
+        "sectionName": "イントロ",
+        "sectionId": "yt-section-1"
+      },
+      {
+        "time": "0:04",
+        "chord": "F",
+        "tabCandidates": [
+          "133211",
+          "x87565"
+        ],
+        "selectedTab": "133211",
+        "sectionName": "イントロ",
+        "sectionId": "yt-section-1"
+      },
+      {
+        "time": "0:08",
+        "chord": "C",
+        "tabCandidates": [
+          "x32010",
+          "x35553"
+        ],
+        "selectedTab": "x32010",
+        "sectionName": "イントロ",
+        "sectionId": "yt-section-1"
+      },
+      {
+        "time": "0:12",
+        "chord": "G",
+        "tabCandidates": [
+          "320003",
+          "355433"
+        ],
+        "selectedTab": "320003",
+        "sectionName": "イントロ",
+        "sectionId": "yt-section-1"
+      },
+      {
+        "time": "0:00",
+        "chord": "F",
+        "tabCandidates": [
+          "133211",
+          "x87565"
+        ],
+        "selectedTab": "133211",
+        "sectionName": "Aメロ",
+        "sectionId": "yt-section-2"
+      },
+      {
+        "time": "0:04",
+        "chord": "C",
+        "tabCandidates": [
+          "x32010",
+          "x35553"
+        ],
+        "selectedTab": "x32010",
+        "sectionName": "Aメロ",
+        "sectionId": "yt-section-2"
+      },
+      {
+        "time": "0:08",
+        "chord": "G",
+        "tabCandidates": [
+          "320003",
+          "355433"
+        ],
+        "selectedTab": "320003",
+        "sectionName": "Aメロ",
+        "sectionId": "yt-section-2"
+      },
+      {
+        "time": "0:12",
+        "chord": "Am",
+        "tabCandidates": [
+          "x02210",
+          "577555"
+        ],
+        "selectedTab": "x02210",
+        "sectionName": "Aメロ",
+        "sectionId": "yt-section-2"
+      },
+      {
+        "time": "0:00",
+        "chord": "Em",
+        "tabCandidates": [
+          "022000",
+          "x79987"
+        ],
+        "selectedTab": "022000",
+        "sectionName": "Bメロ",
+        "sectionId": "yt-section-3"
+      },
+      {
+        "time": "0:04",
+        "chord": "C",
+        "tabCandidates": [
+          "x32010",
+          "x35553"
+        ],
+        "selectedTab": "x32010",
+        "sectionName": "Bメロ",
+        "sectionId": "yt-section-3"
+      },
+      {
+        "time": "0:08",
+        "chord": "G",
+        "tabCandidates": [
+          "320003",
+          "355433"
+        ],
+        "selectedTab": "320003",
+        "sectionName": "Bメロ",
+        "sectionId": "yt-section-3"
+      },
+      {
+        "time": "0:12",
+        "chord": "D",
+        "tabCandidates": [
+          "xx0232",
+          "x57775"
+        ],
+        "selectedTab": "xx0232",
+        "sectionName": "Bメロ",
+        "sectionId": "yt-section-3"
+      }
+    ],
+    "measures": [
+      {
+        "id": "yt-section-1-measure-1",
+        "number": 1,
+        "startTime": "0:00",
+        "chord": "Am",
+        "beats": 4,
+        "subdivision": "4/4",
+        "rhythmPattern": "Down-Up x4",
+        "tabCandidates": [
+          "x02210",
+          "577555"
+        ],
+        "selectedTab": "x02210",
+        "sectionName": "イントロ",
+        "sectionId": "yt-section-1"
+      },
+      {
+        "id": "yt-section-1-measure-2",
+        "number": 2,
+        "startTime": "0:04",
+        "chord": "F",
+        "beats": 4,
+        "subdivision": "4/4",
+        "rhythmPattern": "Down-Up x4",
+        "tabCandidates": [
+          "133211",
+          "x87565"
+        ],
+        "selectedTab": "133211",
+        "sectionName": "イントロ",
+        "sectionId": "yt-section-1"
+      },
+      {
+        "id": "yt-section-1-measure-3",
+        "number": 3,
+        "startTime": "0:08",
+        "chord": "C",
+        "beats": 4,
+        "subdivision": "4/4",
+        "rhythmPattern": "Down-Up x4",
+        "tabCandidates": [
+          "x32010",
+          "x35553"
+        ],
+        "selectedTab": "x32010",
+        "sectionName": "イントロ",
+        "sectionId": "yt-section-1"
+      },
+      {
+        "id": "yt-section-1-measure-4",
+        "number": 4,
+        "startTime": "0:12",
+        "chord": "G",
+        "beats": 4,
+        "subdivision": "4/4",
+        "rhythmPattern": "Down-Up x4",
+        "tabCandidates": [
+          "320003",
+          "355433"
+        ],
+        "selectedTab": "320003",
+        "sectionName": "イントロ",
+        "sectionId": "yt-section-1"
+      },
+      {
+        "id": "yt-section-2-measure-1",
+        "number": 1,
+        "startTime": "0:00",
+        "chord": "F",
+        "beats": 4,
+        "subdivision": "4/4",
+        "rhythmPattern": "Down-Up x4",
+        "tabCandidates": [
+          "133211",
+          "x87565"
+        ],
+        "selectedTab": "133211",
+        "sectionName": "Aメロ",
+        "sectionId": "yt-section-2"
+      },
+      {
+        "id": "yt-section-2-measure-2",
+        "number": 2,
+        "startTime": "0:04",
+        "chord": "C",
+        "beats": 4,
+        "subdivision": "4/4",
+        "rhythmPattern": "Down-Up x4",
+        "tabCandidates": [
+          "x32010",
+          "x35553"
+        ],
+        "selectedTab": "x32010",
+        "sectionName": "Aメロ",
+        "sectionId": "yt-section-2"
+      },
+      {
+        "id": "yt-section-2-measure-3",
+        "number": 3,
+        "startTime": "0:08",
+        "chord": "G",
+        "beats": 4,
+        "subdivision": "4/4",
+        "rhythmPattern": "Down-Up x4",
+        "tabCandidates": [
+          "320003",
+          "355433"
+        ],
+        "selectedTab": "320003",
+        "sectionName": "Aメロ",
+        "sectionId": "yt-section-2"
+      },
+      {
+        "id": "yt-section-2-measure-4",
+        "number": 4,
+        "startTime": "0:12",
+        "chord": "Am",
+        "beats": 4,
+        "subdivision": "4/4",
+        "rhythmPattern": "Down-Up x4",
+        "tabCandidates": [
+          "x02210",
+          "577555"
+        ],
+        "selectedTab": "x02210",
+        "sectionName": "Aメロ",
+        "sectionId": "yt-section-2"
+      },
+      {
+        "id": "yt-section-3-measure-1",
+        "number": 1,
+        "startTime": "0:00",
+        "chord": "Em",
+        "beats": 4,
+        "subdivision": "4/4",
+        "rhythmPattern": "Down-Up x4",
+        "tabCandidates": [
+          "022000",
+          "x79987"
+        ],
+        "selectedTab": "022000",
+        "sectionName": "Bメロ",
+        "sectionId": "yt-section-3"
+      },
+      {
+        "id": "yt-section-3-measure-2",
+        "number": 2,
+        "startTime": "0:04",
+        "chord": "C",
+        "beats": 4,
+        "subdivision": "4/4",
+        "rhythmPattern": "Down-Up x4",
+        "tabCandidates": [
+          "x32010",
+          "x35553"
+        ],
+        "selectedTab": "x32010",
+        "sectionName": "Bメロ",
+        "sectionId": "yt-section-3"
+      },
+      {
+        "id": "yt-section-3-measure-3",
+        "number": 3,
+        "startTime": "0:08",
+        "chord": "G",
+        "beats": 4,
+        "subdivision": "4/4",
+        "rhythmPattern": "Down-Up x4",
+        "tabCandidates": [
+          "320003",
+          "355433"
+        ],
+        "selectedTab": "320003",
+        "sectionName": "Bメロ",
+        "sectionId": "yt-section-3"
+      },
+      {
+        "id": "yt-section-3-measure-4",
+        "number": 4,
+        "startTime": "0:12",
+        "chord": "D",
+        "beats": 4,
+        "subdivision": "4/4",
+        "rhythmPattern": "Down-Up x4",
+        "tabCandidates": [
+          "xx0232",
+          "x57775"
+        ],
+        "selectedTab": "xx0232",
+        "sectionName": "Bメロ",
+        "sectionId": "yt-section-3"
+      }
+    ],
+    "measureCount": 12,
+    "createdAt": "2026-03-18T05:58:43.621Z",
+    "updatedAt": "2026-03-18T05:58:43.621Z"
+  },
+  {
     "id": "afb6e712",
     "title": "新しい譜面",
     "authorName": "名無しの弾き語りさん",
