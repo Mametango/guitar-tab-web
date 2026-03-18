@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim() || "";
-const youtubeImportApiUrl = import.meta.env.VITE_YOUTUBE_IMPORT_BACKEND_URL?.trim() || `${apiBaseUrl}/api/import-youtube`;
 const defaultAuthorName = "名無しの弾き語りさん";
 const defaultSectionName = "Aメロ";
 const defaultManualText = `[イントロ] C | G | Am | F
@@ -746,7 +745,7 @@ export default function App() {
     setErrorMessage("");
 
     try {
-      const response = await fetch(youtubeImportApiUrl, {
+      const response = await fetch(`${apiBaseUrl}/api/import-youtube`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
