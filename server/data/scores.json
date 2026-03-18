@@ -15,7 +15,9 @@
           "x32010",
           "x35553"
         ],
-        "selectedTab": "x32010"
+        "selectedTab": "x32010",
+        "sectionName": "Aメロ",
+        "sectionId": "section-2ivown"
       },
       {
         "time": "0:04",
@@ -24,7 +26,9 @@
           "320003",
           "355433"
         ],
-        "selectedTab": "320003"
+        "selectedTab": "320003",
+        "sectionName": "Aメロ",
+        "sectionId": "section-2ivown"
       },
       {
         "time": "0:08",
@@ -33,7 +37,9 @@
           "x02210",
           "577555"
         ],
-        "selectedTab": "x02210"
+        "selectedTab": "x02210",
+        "sectionName": "Aメロ",
+        "sectionId": "section-2ivown"
       },
       {
         "time": "0:12",
@@ -42,11 +48,14 @@
           "133211",
           "x87565"
         ],
-        "selectedTab": "133211"
+        "selectedTab": "133211",
+        "sectionName": "Aメロ",
+        "sectionId": "section-2ivown"
       }
     ],
     "measures": [
       {
+        "id": "section-2ivown-measure-1",
         "number": 1,
         "startTime": "0:00",
         "chord": "C",
@@ -57,9 +66,12 @@
           "x32010",
           "x35553"
         ],
-        "selectedTab": "x32010"
+        "selectedTab": "x32010",
+        "sectionName": "Aメロ",
+        "sectionId": "section-2ivown"
       },
       {
+        "id": "section-2ivown-measure-2",
         "number": 2,
         "startTime": "0:04",
         "chord": "G",
@@ -70,9 +82,12 @@
           "320003",
           "355433"
         ],
-        "selectedTab": "320003"
+        "selectedTab": "320003",
+        "sectionName": "Aメロ",
+        "sectionId": "section-2ivown"
       },
       {
+        "id": "section-2ivown-measure-3",
         "number": 3,
         "startTime": "0:08",
         "chord": "Am",
@@ -83,9 +98,12 @@
           "x02210",
           "577555"
         ],
-        "selectedTab": "x02210"
+        "selectedTab": "x02210",
+        "sectionName": "Aメロ",
+        "sectionId": "section-2ivown"
       },
       {
+        "id": "section-2ivown-measure-4",
         "number": 4,
         "startTime": "0:12",
         "chord": "F",
@@ -96,11 +114,13 @@
           "133211",
           "x87565"
         ],
-        "selectedTab": "133211"
+        "selectedTab": "133211",
+        "sectionName": "Aメロ",
+        "sectionId": "section-2ivown"
       }
     ],
     "measureCount": 4,
     "createdAt": "2026-03-17T12:33:07.684Z",
-    "updatedAt": "2026-03-17T12:33:07.684Z"
+    "updatedAt": "2026-03-18T05:56:56.333Z"
   }
 ]
