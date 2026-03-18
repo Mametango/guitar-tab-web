@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: minnano-guitar-youtube
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile.youtube-backend
+    dockerContext: .
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: BACKEND_AUTH_TOKEN
+        generateValue: true
